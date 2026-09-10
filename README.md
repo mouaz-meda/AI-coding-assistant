@@ -19,4 +19,8 @@ cp .env.example .env
 uvicorn app.main:app --reload
 ```
 
-Then visit http://127.0.0.1:8000/health
+To run on a different port, either pass `--port` to the command above, or set `PORT` in `.env`
+and run `python -m app.main` instead (reads the port from config, but no `--reload` autodetection
+outside uvicorn's CLI).
+
+Then visit http://127.0.0.1:8000/health (or your configured port).
