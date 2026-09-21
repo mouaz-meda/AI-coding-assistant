@@ -5,3 +5,4 @@ sqlalchemy
 bcrypt
 email-validator
 pyjwt
+openai>=3.0
