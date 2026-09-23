@@ -29,6 +29,21 @@ To let `POST /ingest/path` read a folder on the server, set `INGEST_ROOT` in `.e
 resolved inside that folder; leave it empty to disable). Browser uploads (`POST /ingest/upload`)
 need no setup.
 
+## Using a local model instead of OpenAI
+
+`/chat` and `/review` work with any OpenAI-compatible API. To use a free local model via
+[Ollama](https://ollama.com) instead of OpenAI, set in `.env`:
+
+```
+OPENAI_BASE_URL=http://localhost:11434/v1
+OPENAI_MODEL=qwen2.5-coder:1.5b
+OPENAI_API_KEY=ollama
+```
+
+(`OPENAI_API_KEY` can be any non-empty value — Ollama doesn't check it, but the OpenAI SDK
+requires one to be set.) Run `ollama serve` and `ollama pull llama3.1` first. Leave
+`OPENAI_BASE_URL` empty to use OpenAI's real API.
+
 ## Test
 
 ```bash

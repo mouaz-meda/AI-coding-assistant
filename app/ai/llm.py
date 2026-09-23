@@ -18,7 +18,7 @@ FIX_PROMPT = (
 
 
 def get_chat_response(message: str) -> str:
-    client = OpenAI(api_key=settings.openai_api_key)
+    client = OpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url or None)
     completion = client.chat.completions.create(
         model=settings.openai_model,
         messages=[{"role": "user", "content": message}],
