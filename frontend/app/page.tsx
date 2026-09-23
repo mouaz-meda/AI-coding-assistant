@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardHeader,
@@ -62,7 +63,10 @@ export default function DashboardPage() {
             {new Date(user.created_at).toLocaleString()}
           </p>
         </CardContent>
-        <CardFooter>
+        <CardFooter className="flex-col items-stretch gap-2">
+          <Link href="/ingest" className={buttonVariants({ className: "w-full" })}>
+            Ingest project files
+          </Link>
           <Button variant="outline" className="w-full" onClick={handleLogout}>
             Log out
           </Button>

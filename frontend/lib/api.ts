@@ -45,3 +45,45 @@ export async function getCurrentUser(token: string): Promise<User> {
   if (!res.ok) throw new ApiError(await parseErrorDetail(res));
   return res.json();
 }
+
+export type ProjectFile = {
+  path: string;
+  content: string;
+};
+
+export type SkippedFile = {
+  path: string;
+  reason: string;
+};
+
+export type IngestSummary = {
+  accepted: { path: string; size: number }[];
+  skipped: SkippedFile[];
+  total_accepted: number;
+  total_skipped: number;
+};
+
+async function postIngest(
+  endpoint: "upload" | "path",
+  token: string,
+  body: object,
+): Promise<IngestSummary> {
+  const res = await fetch(`${API_URL}/ingest/${endpoint}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new ApiError(await parseErrorDetail(res));
+  return res.json();
+}
+
+export function ingestUpload(token: string, files: ProjectFile[]): Promise<IngestSummary> {
+  return postIngest("upload", token, { files });
+}
+
+export function ingestPath(token: string, path: string): Promise<IngestSummary> {
+  return postIngest("path", token, { path });
+}

@@ -5,6 +5,7 @@ from app.ai.router import router as chat_router
 from app.auth.router import router as auth_router
 from app.config import settings
 from app.database import Base, engine
+from app.ingestion.router import router as ingest_router
 from app.models import user  # noqa: F401 (registers the model with Base)
 
 Base.metadata.create_all(bind=engine)
@@ -18,6 +19,7 @@ app.add_middleware(
 )
 app.include_router(auth_router)
 app.include_router(chat_router)
+app.include_router(ingest_router)
 
 
 @app.get("/health")

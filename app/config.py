@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 30
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
+    ingest_root: str = ""
+    max_file_bytes: int = 200_000
+    max_files: int = 1000
 
     class Config:
         env_file = ".env"

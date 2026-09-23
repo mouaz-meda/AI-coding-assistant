@@ -24,3 +24,13 @@ and run `python -m app.main` instead (reads the port from config, but no `--relo
 outside uvicorn's CLI).
 
 Then visit http://127.0.0.1:8000/health (or your configured port).
+
+To let `POST /ingest/path` read a folder on the server, set `INGEST_ROOT` in `.env` (paths are
+resolved inside that folder; leave it empty to disable). Browser uploads (`POST /ingest/upload`)
+need no setup.
+
+## Test
+
+```bash
+pytest
+```
