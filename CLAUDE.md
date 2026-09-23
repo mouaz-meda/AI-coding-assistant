@@ -57,11 +57,13 @@ The high-level roadmap is:
 5. AI Coding Assistant architecture
 6. LLM integration
 7. Code/project ingestion
-8. RAG pipeline
-9. Vector database
-10. LangChain integration where useful
-11. Coding-assistant features
-12. Testing, error handling, logging, and production improvements
+8. Single-file review and fix, with a diff of the change
+9. Chat-instructed single-file edits
+10. Multi-file feature requests (naive: all ingested files in context)
+11. RAG pipeline (chunking, embeddings, retrieval) — to scale item 10 past context limits
+12. Vector database
+13. Agentic tool-calling loop, with LangChain integration where it earns its place
+14. Testing, error handling, logging, and production improvements
 
 Do not implement the entire roadmap at once.
 
