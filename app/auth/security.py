@@ -1,5 +1,3 @@
-from datetime import datetime, timedelta, timezone
-
 import bcrypt
 import jwt
 
@@ -15,9 +13,10 @@ def verify_password(password: str, hashed_password: str) -> bool:
 
 
 def create_access_token(data: dict) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
-    to_encode = {**data, "exp": expire}
-    return jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
+    # Expiry intentionally disabled while the app is still under active development
+    # (tokens never expire) — re-enable before shipping by adding back:
+    #   "exp": datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
+    return jwt.encode(data, settings.secret_key, algorithm=settings.algorithm)
 
 
 def decode_access_token(token: str) -> dict | None:
