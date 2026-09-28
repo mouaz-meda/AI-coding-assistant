@@ -95,6 +95,7 @@ export type ReviewResult = {
   action: ReviewAction;
   output: string;
   diff: string | null;
+  instruction: string | null;
 };
 
 export async function reviewFile(
@@ -102,6 +103,7 @@ export async function reviewFile(
   path: string,
   content: string,
   action: ReviewAction,
+  instruction?: string,
 ): Promise<ReviewResult> {
   const res = await fetch(`${API_URL}/review`, {
     method: "POST",
@@ -109,7 +111,7 @@ export async function reviewFile(
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ path, content, action }),
+    body: JSON.stringify({ path, content, action, instruction: instruction || null }),
   });
   if (!res.ok) throw new ApiError(await parseErrorDetail(res));
   return res.json();

@@ -7,6 +7,7 @@ class ReviewRequest(BaseModel):
     path: str
     content: str
     action: Literal["review", "fix"]
+    instruction: str | None = None
 
 
 class ReviewResponse(BaseModel):
@@ -14,3 +15,4 @@ class ReviewResponse(BaseModel):
     action: str
     output: str
     diff: str | None = None
+    instruction: str | None = None

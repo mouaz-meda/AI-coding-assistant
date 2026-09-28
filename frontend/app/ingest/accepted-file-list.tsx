@@ -2,20 +2,25 @@
 
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import type { ReviewAction } from "./utils";
 
 export function AcceptedFileList({
   files,
   uploadedContent,
   reviewing,
+  instructions,
   onReview,
   onRemove,
+  onInstructionChange,
 }: {
   files: { path: string; size: number }[];
   uploadedContent: Map<string, string>;
   reviewing: { path: string; action: ReviewAction } | null;
+  instructions: Map<string, string>;
   onReview: (path: string, action: ReviewAction) => void;
   onRemove: (path: string) => void;
+  onInstructionChange: (path: string, text: string) => void;
 }) {
   // Disabled for every file while any one review/fix request is in flight, not just
   // this row's — avoids firing a second request or changing state mid-request.
@@ -31,6 +36,16 @@ export function AcceptedFileList({
               <span className="break-all">{file.path}</span>
               <span className="shrink-0 text-muted-foreground">{file.size.toLocaleString()} B</span>
             </div>
+            {canAct && (
+              <Textarea
+                placeholder="Optional instruction, e.g. 'add input validation' (leave empty for a generic review/fix)"
+                className="min-h-8 text-xs"
+                rows={1}
+                disabled={globallyBusy}
+                value={instructions.get(file.path) ?? ""}
+                onChange={(e) => onInstructionChange(file.path, e.target.value)}
+              />
+            )}
             <div className="flex items-center gap-2">
               {canAct ? (
                 <>

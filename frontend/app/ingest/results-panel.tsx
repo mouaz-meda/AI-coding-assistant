@@ -39,6 +39,11 @@ export function ResultsPanel({
                 <span className="text-xs text-muted-foreground capitalize">{active}</span>
               )}
             </div>
+            {result.instruction && (
+              <p className="text-xs text-muted-foreground">
+                Instruction: <span className="italic">{result.instruction}</span>
+              </p>
+            )}
             <ReviewResultView result={result} original={uploadedContent.get(path)} />
           </div>
         );

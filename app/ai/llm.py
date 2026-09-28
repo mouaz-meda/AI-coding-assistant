@@ -16,6 +16,18 @@ FIX_PROMPT = (
     "content — no explanation, no commentary, no markdown code fences.\n\n{content}"
 )
 
+INSTRUCTED_REVIEW_PROMPT = (
+    "You are a code reviewer. Follow this instruction when reviewing the file below: "
+    "{instruction}\n\nDo not rewrite the file — report your findings as plain text.\n\n"
+    "File:\n{content}"
+)
+
+INSTRUCTED_FIX_PROMPT = (
+    "You are a code editor. Follow this instruction and apply it to the file below: "
+    "{instruction}\n\nReturn ONLY the resulting file content — no explanation, no "
+    "commentary, no markdown code fences.\n\nFile:\n{content}"
+)
+
 
 def get_chat_response(message: str) -> str:
     client = OpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url or None)
@@ -38,7 +50,17 @@ def strip_code_fence(text: str) -> str:
     return text
 
 
-def get_code_response(content: str, action: Literal["review", "fix"]) -> str:
-    prompt_template = REVIEW_PROMPT if action == "review" else FIX_PROMPT
-    reply = get_chat_response(prompt_template.format(content=content))
+def get_code_response(
+    content: str,
+    action: Literal["review", "fix"],
+    instruction: str | None = None,
+) -> str:
+    if instruction:
+        prompt_template = INSTRUCTED_REVIEW_PROMPT if action == "review" else INSTRUCTED_FIX_PROMPT
+        prompt = prompt_template.format(instruction=instruction, content=content)
+    else:
+        prompt_template = REVIEW_PROMPT if action == "review" else FIX_PROMPT
+        prompt = prompt_template.format(content=content)
+
+    reply = get_chat_response(prompt)
     return reply if action == "review" else strip_code_fence(reply)

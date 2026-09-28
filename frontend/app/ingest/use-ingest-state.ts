@@ -29,6 +29,8 @@ export function useIngestState() {
   // never re-fires a request — only a first-time Review/Fix click does.
   const [results, setResults] = useState<Map<string, FileResults>>(new Map());
   const [activeTab, setActiveTab] = useState<Map<string, ReviewAction>>(new Map());
+  // Live instruction text per file, separate from results since it's input, not a fetched value.
+  const [instructions, setInstructions] = useState<Map<string, string>>(new Map());
 
   useEffect(() => {
     if (!getToken()) router.push("/login");
@@ -106,8 +108,11 @@ export function useIngestState() {
     const token = requireToken();
     if (!token) return;
 
-    // Already fetched for this action — just switch tabs, no request.
-    if (results.get(path)?.[action]) {
+    const currentInstruction = instructions.get(path) ?? "";
+    const cached = results.get(path)?.[action];
+    // Already fetched for this exact action + instruction — just switch tabs, no request.
+    // A changed instruction is treated as a new request, not a cache hit.
+    if (cached && (cached.instruction ?? "") === currentInstruction) {
       setActiveTab((prev) => new Map(prev).set(path, action));
       return;
     }
@@ -118,7 +123,7 @@ export function useIngestState() {
     setError(null);
     setReviewing({ path, action });
     try {
-      const result = await reviewFile(token, path, content, action);
+      const result = await reviewFile(token, path, content, action, currentInstruction);
       setResults((prev) => {
         const next = new Map(prev);
         next.set(path, { ...next.get(path), [action]: result });
@@ -130,6 +135,10 @@ export function useIngestState() {
     } finally {
       setReviewing(null);
     }
+  }
+
+  function setInstruction(path: string, text: string) {
+    setInstructions((prev) => new Map(prev).set(path, text));
   }
 
   function removeFile(path: string) {
@@ -157,6 +166,11 @@ export function useIngestState() {
       next.delete(path);
       return next;
     });
+    setInstructions((prev) => {
+      const next = new Map(prev);
+      next.delete(path);
+      return next;
+    });
   }
 
   function setFileTab(path: string, action: ReviewAction) {
@@ -174,10 +188,12 @@ export function useIngestState() {
     reviewing,
     results,
     activeTab,
+    instructions,
     handleFilesSelected,
     handlePathSubmit,
     handleReview,
     removeFile,
     setFileTab,
+    setInstruction,
   };
 }

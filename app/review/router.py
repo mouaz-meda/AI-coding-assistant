@@ -11,6 +11,12 @@ router = APIRouter(tags=["review"])
 
 @router.post("/review", response_model=ReviewResponse)
 def review(request: ReviewRequest, current_user: User = Depends(get_current_user)):
-    output = get_code_response(request.content, request.action)
+    output = get_code_response(request.content, request.action, request.instruction)
     diff = make_diff(request.path, request.content, output) if request.action == "fix" else None
-    return ReviewResponse(path=request.path, action=request.action, output=output, diff=diff)
+    return ReviewResponse(
+        path=request.path,
+        action=request.action,
+        output=output,
+        diff=diff,
+        instruction=request.instruction,
+    )

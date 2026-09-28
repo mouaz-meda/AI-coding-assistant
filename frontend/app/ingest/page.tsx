@@ -25,11 +25,13 @@ export default function IngestPage() {
     reviewing,
     results,
     activeTab,
+    instructions,
     handleFilesSelected,
     handlePathSubmit,
     handleReview,
     removeFile,
     setFileTab,
+    setInstruction,
   } = useIngestState();
 
   // While a review/fix request is running, block every other control on the page
@@ -108,8 +110,10 @@ export default function IngestPage() {
                   files={summary.accepted}
                   uploadedContent={uploadedContent}
                   reviewing={reviewing}
+                  instructions={instructions}
                   onReview={handleReview}
                   onRemove={removeFile}
+                  onInstructionChange={setInstruction}
                 />
               </div>
               <div className="flex flex-col gap-2">
