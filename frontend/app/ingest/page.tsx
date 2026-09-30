@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { AcceptedFileList } from "./accepted-file-list";
+import { FilePicker } from "./file-picker";
 import { ResultsPanel } from "./results-panel";
 import { useIngestState } from "./use-ingest-state";
 
@@ -26,6 +27,8 @@ export default function IngestPage() {
     results,
     activeTab,
     instructions,
+    filesLabel,
+    folderLabel,
     handleFilesSelected,
     handlePathSubmit,
     handleReview,
@@ -53,16 +56,24 @@ export default function IngestPage() {
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-2">
               <Label htmlFor="files">Upload files</Label>
-              <Input id="files" type="file" multiple disabled={anyBusy} onChange={handleFilesSelected} />
+              <FilePicker
+                id="files"
+                placeholder="No file chosen"
+                displayText={filesLabel}
+                multiple
+                disabled={anyBusy}
+                onChange={handleFilesSelected}
+              />
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="folder">Upload a folder</Label>
-              <Input
+              <FilePicker
                 id="folder"
-                type="file"
+                placeholder="No folder chosen"
+                displayText={folderLabel}
                 disabled={anyBusy}
                 onChange={handleFilesSelected}
-                {...folderPickerProps}
+                inputProps={folderPickerProps}
               />
             </div>
           </div>

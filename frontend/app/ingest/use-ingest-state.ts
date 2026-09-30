@@ -31,6 +31,11 @@ export function useIngestState() {
   const [activeTab, setActiveTab] = useState<Map<string, ReviewAction>>(new Map());
   // Live instruction text per file, separate from results since it's input, not a fetched value.
   const [instructions, setInstructions] = useState<Map<string, string>>(new Map());
+  // The browser's own "N files selected" text on a file input is native UI we can't
+  // customize or rely on (it reverts the moment the input resets), so FilePicker
+  // shows this instead. One per input, since each keeps its own last selection.
+  const [filesLabel, setFilesLabel] = useState<string | null>(null);
+  const [folderLabel, setFolderLabel] = useState<string | null>(null);
 
   useEffect(() => {
     if (!getToken()) router.push("/login");
@@ -43,11 +48,22 @@ export function useIngestState() {
   }
 
   async function handleFilesSelected(e: ChangeEvent<HTMLInputElement>) {
-    const selected = Array.from(e.target.files ?? []);
-    e.target.value = "";
+    const inputEl = e.target;
+    const selected = Array.from(inputEl.files ?? []);
     const token = requireToken();
     if (!token) return;
     if (selected.length === 0) return;
+
+    const isFolder = selected.some((f) => f.webkitRelativePath);
+    const label =
+      selected.length === 1 && !isFolder
+        ? selected[0].name
+        : `${selected.length} file${selected.length === 1 ? "" : "s"}`;
+    if (isFolder) {
+      setFolderLabel(label);
+    } else {
+      setFilesLabel(label);
+    }
 
     setError(null);
     setSummary(null);
@@ -81,6 +97,10 @@ export function useIngestState() {
       setError(err instanceof ApiError ? err.message : "Something went wrong");
     } finally {
       setBusy(false);
+      // Reset only now (not before processing) so the browser's native "N files
+      // selected" display stays visible while ingesting — still resets so the
+      // same file/folder can be re-selected later.
+      inputEl.value = "";
     }
   }
 
@@ -189,6 +209,8 @@ export function useIngestState() {
     results,
     activeTab,
     instructions,
+    filesLabel,
+    folderLabel,
     handleFilesSelected,
     handlePathSubmit,
     handleReview,
