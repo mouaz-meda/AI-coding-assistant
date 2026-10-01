@@ -116,3 +116,34 @@ export async function reviewFile(
   if (!res.ok) throw new ApiError(await parseErrorDetail(res));
   return res.json();
 }
+
+export type FileEdit = {
+  path: string;
+  output: string;
+  diff: string;
+};
+
+export type MultiReviewResult = {
+  action: ReviewAction;
+  instruction: string;
+  output: string | null;
+  edits: FileEdit[];
+};
+
+export async function reviewMultipleFiles(
+  token: string,
+  files: ProjectFile[],
+  action: ReviewAction,
+  instruction: string,
+): Promise<MultiReviewResult> {
+  const res = await fetch(`${API_URL}/review/multi`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ files, action, instruction }),
+  });
+  if (!res.ok) throw new ApiError(await parseErrorDetail(res));
+  return res.json();
+}

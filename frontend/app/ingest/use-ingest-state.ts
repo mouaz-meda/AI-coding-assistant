@@ -7,7 +7,9 @@ import {
   ingestPath,
   ingestUpload,
   reviewFile,
+  reviewMultipleFiles,
   type IngestSummary,
+  type MultiReviewResult,
   type ProjectFile,
   type SkippedFile,
 } from "@/lib/api";
@@ -36,6 +38,8 @@ export function useIngestState() {
   // shows this instead. One per input, since each keeps its own last selection.
   const [filesLabel, setFilesLabel] = useState<string | null>(null);
   const [folderLabel, setFolderLabel] = useState<string | null>(null);
+  const [multiBusy, setMultiBusy] = useState(false);
+  const [multiResult, setMultiResult] = useState<MultiReviewResult | null>(null);
 
   useEffect(() => {
     if (!getToken()) router.push("/login");
@@ -161,6 +165,25 @@ export function useIngestState() {
     setInstructions((prev) => new Map(prev).set(path, text));
   }
 
+  async function handleMultiReview(action: ReviewAction, instruction: string) {
+    const token = requireToken();
+    if (!token) return;
+    if (!instruction.trim()) return;
+
+    const files: ProjectFile[] = [...uploadedContent].map(([path, content]) => ({ path, content }));
+    if (files.length === 0) return;
+
+    setError(null);
+    setMultiBusy(true);
+    try {
+      setMultiResult(await reviewMultipleFiles(token, files, action, instruction));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Something went wrong");
+    } finally {
+      setMultiBusy(false);
+    }
+  }
+
   function removeFile(path: string) {
     setSummary((prev) =>
       prev
@@ -211,9 +234,12 @@ export function useIngestState() {
     instructions,
     filesLabel,
     folderLabel,
+    multiBusy,
+    multiResult,
     handleFilesSelected,
     handlePathSubmit,
     handleReview,
+    handleMultiReview,
     removeFile,
     setFileTab,
     setInstruction,

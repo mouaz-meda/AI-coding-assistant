@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends
 
-from app.ai.llm import get_code_response
+from app.ai.llm import get_code_response, get_multi_file_response
 from app.auth.dependencies import get_current_user
 from app.models.user import User
 from app.review.diff import make_diff
-from app.schemas.review import ReviewRequest, ReviewResponse
+from app.review.multi import parse_file_edits
+from app.schemas.review import MultiReviewRequest, MultiReviewResponse, ReviewRequest, ReviewResponse
 
 router = APIRouter(tags=["review"])
 
@@ -20,3 +21,14 @@ def review(request: ReviewRequest, current_user: User = Depends(get_current_user
         diff=diff,
         instruction=request.instruction,
     )
+
+
+@router.post("/review/multi", response_model=MultiReviewResponse)
+def review_multi(request: MultiReviewRequest, current_user: User = Depends(get_current_user)):
+    reply = get_multi_file_response(request.files, request.action, request.instruction)
+    if request.action == "review":
+        return MultiReviewResponse(action="review", instruction=request.instruction, output=reply)
+
+    originals = {f.path: f.content for f in request.files}
+    edits = parse_file_edits(reply, originals)
+    return MultiReviewResponse(action="fix", instruction=request.instruction, edits=edits)

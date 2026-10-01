@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { AcceptedFileList } from "./accepted-file-list";
 import { FilePicker } from "./file-picker";
+import { MultiReview } from "./multi-review";
 import { ResultsPanel } from "./results-panel";
 import { useIngestState } from "./use-ingest-state";
 
@@ -29,9 +30,12 @@ export default function IngestPage() {
     instructions,
     filesLabel,
     folderLabel,
+    multiBusy,
+    multiResult,
     handleFilesSelected,
     handlePathSubmit,
     handleReview,
+    handleMultiReview,
     removeFile,
     setFileTab,
     setInstruction,
@@ -40,7 +44,7 @@ export default function IngestPage() {
   // While a review/fix request is running, block every other control on the page
   // rather than just the file it's for — avoids firing overlapping requests.
   const isReviewing = reviewing !== null;
-  const anyBusy = busy || isReviewing;
+  const anyBusy = busy || isReviewing || multiBusy;
 
   return (
     <div className="flex flex-1 flex-col items-center gap-4 p-6">
@@ -139,6 +143,15 @@ export default function IngestPage() {
                 </ul>
               </div>
             </div>
+
+            <MultiReview
+              fileCount={uploadedContent.size}
+              busy={multiBusy}
+              result={multiResult}
+              uploadedContent={uploadedContent}
+              disabled={anyBusy}
+              onSubmit={handleMultiReview}
+            />
 
             <ResultsPanel
               results={results}

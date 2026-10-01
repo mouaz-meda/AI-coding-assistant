@@ -3,6 +3,12 @@ from typing import Literal
 from openai import OpenAI
 
 from app.config import settings
+from app.schemas.ingestion import ProjectFile
+
+# Delimiter both the outgoing prompt and the model's fix-mode reply use to mark a
+# file boundary — a plain text marker avoids the escaping headaches of asking the
+# model to return code inside JSON.
+FILE_MARKER = "=== {path} ==="
 
 REVIEW_PROMPT = (
     "You are a code reviewer. Read the following file and describe any bugs, "
@@ -64,3 +70,31 @@ def get_code_response(
 
     reply = get_chat_response(prompt)
     return reply if action == "review" else strip_code_fence(reply)
+
+
+MULTI_REVIEW_PROMPT = (
+    "You are a code reviewer. Follow this instruction while reviewing the files below: "
+    "{instruction}\n\nReport your findings as plain text, referencing file paths where "
+    "relevant. Do not rewrite any file.\n\n{files}"
+)
+
+MULTI_FIX_PROMPT = (
+    "You are a code editor working across a multi-file project. Follow this instruction: "
+    "{instruction}\n\nOnly return files whose content actually changed. For each changed "
+    f'file, output a line exactly in the form {FILE_MARKER.format(path="<path>")} followed by '
+    "the file's full new content. Do not include unchanged files, explanations, commentary, "
+    "or markdown code fences.\n\n{files}"
+)
+
+
+def get_multi_file_response(
+    files: list[ProjectFile],
+    action: Literal["review", "fix"],
+    instruction: str,
+) -> str:
+    files_block = "\n\n".join(
+        f"{FILE_MARKER.format(path=f.path)}\n{f.content}" for f in files
+    )
+    prompt_template = MULTI_REVIEW_PROMPT if action == "review" else MULTI_FIX_PROMPT
+    prompt = prompt_template.format(instruction=instruction, files=files_block)
+    return get_chat_response(prompt)
