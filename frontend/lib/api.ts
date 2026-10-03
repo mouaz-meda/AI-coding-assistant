@@ -88,6 +88,19 @@ export function ingestPath(token: string, path: string): Promise<IngestSummary> 
   return postIngest("path", token, { path });
 }
 
+export async function ingestPathFile(token: string, path: string, file: string): Promise<ProjectFile> {
+  const res = await fetch(`${API_URL}/ingest/path/file`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ path, file }),
+  });
+  if (!res.ok) throw new ApiError(await parseErrorDetail(res));
+  return res.json();
+}
+
 export type ReviewAction = "review" | "fix";
 
 export type ReviewResult = {

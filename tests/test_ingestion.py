@@ -2,10 +2,12 @@ import pytest
 
 from app.config import settings
 from app.ingestion.loader import (
+    FileRejectedError,
     PathNotAllowedError,
     TooManyFilesError,
     filter_files,
     load_directory,
+    read_file,
     resolve_within_root,
 )
 from app.schemas.ingestion import ProjectFile
@@ -96,6 +98,39 @@ def test_resolve_within_root_allows_paths_inside(tmp_path):
 
     assert resolve_within_root(str(tmp_path), "repo") == (tmp_path / "repo").resolve()
     assert resolve_within_root(str(tmp_path), "") == tmp_path.resolve()
+
+
+def test_read_file_returns_content_for_an_accepted_file(tmp_path):
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "util.py").write_text("y = 1")
+
+    result = read_file(tmp_path, "pkg/util.py")
+
+    assert result == ProjectFile(path="pkg/util.py", content="y = 1")
+
+
+def test_read_file_rejects_oversized_or_binary(monkeypatch, tmp_path):
+    monkeypatch.setattr(settings, "max_file_bytes", 2)
+    (tmp_path / "big.txt").write_text("too long")
+    (tmp_path / "logo.png").write_bytes(b"\x89PNG\0\0")
+
+    with pytest.raises(FileRejectedError):
+        read_file(tmp_path, "big.txt")
+    with pytest.raises(FileRejectedError):
+        read_file(tmp_path, "logo.png")
+
+
+def test_read_file_missing_or_escaping_path_not_found(tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "secret.txt").write_text("secret")
+    root = tmp_path / "root"
+    root.mkdir()
+
+    with pytest.raises(FileNotFoundError):
+        read_file(root, "missing.py")
+    with pytest.raises(PathNotAllowedError):
+        read_file(root, "../outside/secret.txt")
 
 
 def test_resolve_within_root_rejects_escapes(tmp_path):

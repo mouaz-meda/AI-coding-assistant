@@ -24,12 +24,14 @@ export default function IngestPage() {
     error,
     busy,
     uploadedContent,
+    ingestedRoot,
     reviewing,
     results,
     activeTab,
     instructions,
     filesLabel,
     folderLabel,
+    multiAction,
     multiBusy,
     multiResult,
     handleFilesSelected,
@@ -124,6 +126,7 @@ export default function IngestPage() {
                 <AcceptedFileList
                   files={summary.accepted}
                   uploadedContent={uploadedContent}
+                  ingestedRoot={ingestedRoot}
                   reviewing={reviewing}
                   instructions={instructions}
                   onReview={handleReview}
@@ -145,8 +148,8 @@ export default function IngestPage() {
             </div>
 
             <MultiReview
-              fileCount={uploadedContent.size}
-              busy={multiBusy}
+              fileCount={summary.accepted.length}
+              activeAction={multiAction}
               result={multiResult}
               uploadedContent={uploadedContent}
               disabled={anyBusy}

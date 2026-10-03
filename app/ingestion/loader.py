@@ -16,6 +16,10 @@ class PathNotAllowedError(Exception):
     pass
 
 
+class FileRejectedError(Exception):
+    pass
+
+
 @dataclass
 class IngestResult:
     accepted: list[ProjectFile] = field(default_factory=list)
@@ -98,6 +102,27 @@ def load_directory(root: Path) -> IngestResult:
                 raise TooManyFilesError(f"Too many files (limit is {settings.max_files})")
             result.accepted.append(ProjectFile(path=relative, content=data.decode("utf-8")))
     return result
+
+
+def read_file(directory: Path, relative_path: str) -> ProjectFile:
+    """Re-read a single file from an already-ingested directory, applying the same
+    rules as load_directory. Used to fetch content for a path-ingested file on
+    demand, since /ingest/path never returns file content up front."""
+    full_path = resolve_within_root(str(directory), relative_path)
+    if full_path.is_symlink() or not full_path.is_file():
+        raise FileNotFoundError(relative_path)
+
+    try:
+        with open(full_path, "rb") as f:
+            data = f.read(settings.max_file_bytes + 1)
+    except OSError as error:
+        raise FileNotFoundError(relative_path) from error
+
+    reason = check_file(relative_path, data)
+    if reason:
+        raise FileRejectedError(reason)
+
+    return ProjectFile(path=relative_path, content=data.decode("utf-8"))
 
 
 def resolve_within_root(root: str, user_path: str) -> Path:

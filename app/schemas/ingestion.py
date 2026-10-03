@@ -14,6 +14,11 @@ class PathRequest(BaseModel):
     path: str
 
 
+class PathFileRequest(BaseModel):
+    path: str
+    file: str
+
+
 class AcceptedFile(BaseModel):
     path: str
     size: int

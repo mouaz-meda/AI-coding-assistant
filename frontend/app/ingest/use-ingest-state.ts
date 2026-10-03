@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   ApiError,
   ingestPath,
+  ingestPathFile,
   ingestUpload,
   reviewFile,
   reviewMultipleFiles,
@@ -23,9 +24,12 @@ export function useIngestState() {
   const [serverPath, setServerPath] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  // Content for uploaded files only — /ingest/path never returns file content, so those
-  // files can't be reviewed/fixed yet.
+  // Content for uploaded files, plus any path-ingested file fetched on demand via
+  // ingestedRoot below — /ingest/path itself never returns file content up front.
   const [uploadedContent, setUploadedContent] = useState<Map<string, string>>(new Map());
+  // The directory last submitted via the server-path form, so handleReview knows
+  // where to fetch a given path-ingested file's content from when it's first needed.
+  const [ingestedRoot, setIngestedRoot] = useState<string | null>(null);
   const [reviewing, setReviewing] = useState<{ path: string; action: ReviewAction } | null>(null);
   // Both actions' results are cached per file, keyed by action, so switching tabs
   // never re-fires a request — only a first-time Review/Fix click does.
@@ -38,7 +42,7 @@ export function useIngestState() {
   // shows this instead. One per input, since each keeps its own last selection.
   const [filesLabel, setFilesLabel] = useState<string | null>(null);
   const [folderLabel, setFolderLabel] = useState<string | null>(null);
-  const [multiBusy, setMultiBusy] = useState(false);
+  const [multiAction, setMultiAction] = useState<ReviewAction | null>(null);
   const [multiResult, setMultiResult] = useState<MultiReviewResult | null>(null);
 
   useEffect(() => {
@@ -71,6 +75,7 @@ export function useIngestState() {
 
     setError(null);
     setSummary(null);
+    setIngestedRoot(null);
     setBusy(true);
     try {
       const decoder = new TextDecoder("utf-8", { fatal: true });
@@ -118,9 +123,11 @@ export function useIngestState() {
     setLocalSkipped([]);
     setUploadedContent(new Map());
     setResults(new Map());
+    setIngestedRoot(null);
     setBusy(true);
     try {
       setSummary(await ingestPath(token, serverPath));
+      setIngestedRoot(serverPath);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Something went wrong");
     } finally {
@@ -141,12 +148,18 @@ export function useIngestState() {
       return;
     }
 
-    const content = uploadedContent.get(path);
-    if (content === undefined) return;
-
     setError(null);
     setReviewing({ path, action });
     try {
+      let content = uploadedContent.get(path);
+      if (content === undefined) {
+        // Not an uploaded file — if it came from a server-path ingest, fetch its
+        // content now (and cache it) instead of giving up.
+        if (ingestedRoot === null) return;
+        content = (await ingestPathFile(token, ingestedRoot, path)).content;
+        setUploadedContent((prev) => new Map(prev).set(path, content!));
+      }
+
       const result = await reviewFile(token, path, content, action, currentInstruction);
       setResults((prev) => {
         const next = new Map(prev);
@@ -169,18 +182,30 @@ export function useIngestState() {
     const token = requireToken();
     if (!token) return;
     if (!instruction.trim()) return;
-
-    const files: ProjectFile[] = [...uploadedContent].map(([path, content]) => ({ path, content }));
-    if (files.length === 0) return;
+    if (!summary || summary.accepted.length === 0) return;
 
     setError(null);
-    setMultiBusy(true);
+    setMultiAction(action);
     try {
+      // Fetch content for any accepted file not already cached (uploads have it
+      // already; path-ingested files are fetched lazily, same as a single-file
+      // review/fix would) so multi-review always covers every accepted file.
+      const missing = summary.accepted.filter((f) => !uploadedContent.has(f.path));
+      let content = uploadedContent;
+      if (missing.length > 0) {
+        if (ingestedRoot === null) throw new ApiError("Some accepted files have no content available");
+        const fetched = await Promise.all(missing.map((f) => ingestPathFile(token, ingestedRoot, f.path)));
+        content = new Map(uploadedContent);
+        fetched.forEach((f) => content.set(f.path, f.content));
+        setUploadedContent(content);
+      }
+
+      const files: ProjectFile[] = summary.accepted.map((f) => ({ path: f.path, content: content.get(f.path)! }));
       setMultiResult(await reviewMultipleFiles(token, files, action, instruction));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Something went wrong");
     } finally {
-      setMultiBusy(false);
+      setMultiAction(null);
     }
   }
 
@@ -228,13 +253,15 @@ export function useIngestState() {
     error,
     busy,
     uploadedContent,
+    ingestedRoot,
     reviewing,
     results,
     activeTab,
     instructions,
     filesLabel,
     folderLabel,
-    multiBusy,
+    multiAction,
+    multiBusy: multiAction !== null,
     multiResult,
     handleFilesSelected,
     handlePathSubmit,

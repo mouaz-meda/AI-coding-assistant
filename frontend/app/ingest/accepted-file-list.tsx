@@ -8,6 +8,7 @@ import type { ReviewAction } from "./utils";
 export function AcceptedFileList({
   files,
   uploadedContent,
+  ingestedRoot,
   reviewing,
   instructions,
   onReview,
@@ -16,6 +17,7 @@ export function AcceptedFileList({
 }: {
   files: { path: string; size: number }[];
   uploadedContent: Map<string, string>;
+  ingestedRoot: string | null;
   reviewing: { path: string; action: ReviewAction } | null;
   instructions: Map<string, string>;
   onReview: (path: string, action: ReviewAction) => void;
@@ -29,7 +31,7 @@ export function AcceptedFileList({
   return (
     <ul className="max-h-64 overflow-y-auto text-sm">
       {files.map((file) => {
-        const canAct = uploadedContent.has(file.path);
+        const canAct = uploadedContent.has(file.path) || ingestedRoot !== null;
         return (
           <li key={file.path} className="flex flex-col gap-1 py-1">
             <div className="flex justify-between gap-2">

@@ -11,14 +11,14 @@ import type { ReviewAction } from "./utils";
 
 export function MultiReview({
   fileCount,
-  busy,
+  activeAction,
   result,
   uploadedContent,
   disabled,
   onSubmit,
 }: {
   fileCount: number;
-  busy: boolean;
+  activeAction: ReviewAction | null;
   result: MultiReviewResult | null;
   uploadedContent: Map<string, string>;
   disabled: boolean;
@@ -48,17 +48,17 @@ export function MultiReview({
       />
       <div className="flex gap-2">
         <Button variant="outline" size="sm" disabled={disabled} onClick={() => submit("review")}>
-          {busy ? <Loader2 className="size-3 animate-spin" /> : null}
+          {activeAction === "review" ? <Loader2 className="size-3 animate-spin" /> : null}
           Review
         </Button>
         <Button variant="outline" size="sm" disabled={disabled} onClick={() => submit("fix")}>
-          {busy ? <Loader2 className="size-3 animate-spin" /> : null}
+          {activeAction === "fix" ? <Loader2 className="size-3 animate-spin" /> : null}
           Fix
         </Button>
       </div>
-      {busy && (
+      {activeAction && (
         <p className="text-sm text-muted-foreground">
-          Sending all uploaded files to the model — this can take a while.
+          {activeAction === "review" ? "Reviewing" : "Fixing"} all files — this can take a while.
         </p>
       )}
 
