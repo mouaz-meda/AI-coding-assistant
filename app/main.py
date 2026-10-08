@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -8,6 +10,11 @@ from app.database import Base, engine
 from app.ingestion.router import router as ingest_router
 from app.models import user  # noqa: F401 (registers the model with Base)
 from app.review.router import router as review_router
+
+# Minimal stdlib logging so app.* loggers (e.g. app.ai.embeddings) are actually
+# visible in the console. Proper logging setup (formatting, levels per
+# environment, etc.) is Phase 14 — this just makes INFO-level logs show up.
+logging.basicConfig(level=logging.INFO)
 
 Base.metadata.create_all(bind=engine)
 

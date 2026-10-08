@@ -141,6 +141,7 @@ export type MultiReviewResult = {
   instruction: string;
   output: string | null;
   edits: FileEdit[];
+  considered_files: string[];
 };
 
 export async function reviewMultipleFiles(

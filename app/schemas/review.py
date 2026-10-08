@@ -37,3 +37,7 @@ class MultiReviewResponse(BaseModel):
     instruction: str
     output: str | None = None
     edits: list[FileEdit] = []
+    # Which files were actually sent to the LLM — all of them if retrieval was
+    # skipped (few enough files), otherwise the top-N most relevant. Surfaced so
+    # retrieval stays visible rather than a hidden filtering step.
+    considered_files: list[str] = []

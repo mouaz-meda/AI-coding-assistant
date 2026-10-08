@@ -62,6 +62,13 @@ export function MultiReview({
         </p>
       )}
 
+      {result && (
+        <p className="text-xs text-muted-foreground">
+          Considered {result.considered_files.length} of {fileCount} file{fileCount === 1 ? "" : "s"}:{" "}
+          <span className="italic break-all">{result.considered_files.join(", ")}</span>
+        </p>
+      )}
+
       {result?.action === "review" && result.output && <ReviewMarkdown text={result.output} />}
       {result?.action === "fix" && (
         <div className="flex flex-col gap-4">
