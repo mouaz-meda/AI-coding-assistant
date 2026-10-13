@@ -7,4 +7,5 @@ email-validator
 pyjwt
 openai>=3.0
 numpy
+chromadb
 pytest

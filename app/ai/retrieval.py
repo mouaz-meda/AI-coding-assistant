@@ -2,6 +2,7 @@ import numpy as np
 
 from app.ai.chunking import chunk_file
 from app.ai.embeddings import get_embeddings
+from app.ai.vector_store import rank_by_similarity_chroma
 from app.config import settings
 from app.schemas.ingestion import ProjectFile
 
@@ -57,5 +58,5 @@ def select_relevant_files(
         i += len(chunks)
 
     query_embedding = get_embeddings([instruction])[0]
-    relevant_paths = set(rank_by_similarity(file_embeddings, query_embedding, top_n))
+    relevant_paths = set(rank_by_similarity_chroma(file_embeddings, query_embedding, top_n))
     return [f for f in files if f.path in relevant_paths]
