@@ -7,7 +7,6 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./data/app.db"
     secret_key: str = "dev-secret-key-change-me"
     algorithm: str = "HS256"
-    access_token_expire_minutes: int = 30  # currently unused — see app/auth/security.py
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
     openai_base_url: str = ""
@@ -29,6 +28,17 @@ class Settings(BaseSettings):
     # lines are (rag_chunk_lines alone doesn't bound that).
     rag_chunk_max_chars: int = 4000
     rag_top_files: int = 5
+    # LangChain's code-aware splitter's overlap, in characters (vs.
+    # rag_chunk_overlap's line-count, used only by the generic fallback
+    # splitter for languages the code splitter doesn't know).
+    rag_code_chunk_overlap_chars: int = 200
+    # Phase 12 (LangChain/Chroma): persistent, per-user vector store location.
+    chroma_persist_directory: str = "./data/chroma"
+    # Phase 13 (LangChain agent): langgraph recursion limit on the tool-calling
+    # loop. Each round trip costs 2 graph steps (model, then tools), so this
+    # caps the agent at roughly 6 tool-calling round trips before it's forced
+    # to stop (raises GraphRecursionError rather than a graceful final answer).
+    agent_recursion_limit: int = 12
 
     class Config:
         env_file = ".env"

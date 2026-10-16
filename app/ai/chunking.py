@@ -1,4 +1,7 @@
 from dataclasses import dataclass
+from pathlib import Path
+
+from langchain_text_splitters import Language, RecursiveCharacterTextSplitter
 
 from app.config import settings
 from app.schemas.ingestion import ProjectFile
@@ -12,18 +15,62 @@ class Chunk:
     end_line: int
 
 
+# LangChain's splitter understands these languages' syntax (functions/classes)
+# well enough to split along real boundaries instead of a fixed line count.
+# More languages can be added here later; anything else falls back to the
+# generic line-based splitter below.
+_LANGUAGE_BY_EXTENSION = {
+    ".py": Language.PYTHON,
+    ".js": Language.JS,
+    ".ts": Language.TS,
+}
+
+
 def chunk_file(
     file: ProjectFile,
     chunk_lines: int | None = None,
     overlap: int | None = None,
     max_chars: int | None = None,
 ) -> list[Chunk]:
-    """Split a file into overlapping line-based chunks.
+    language = _LANGUAGE_BY_EXTENSION.get(Path(file.path).suffix)
+    if language is not None:
+        return _chunk_by_language(file, language, max_chars or settings.rag_chunk_max_chars)
+    return _chunk_by_lines(file, chunk_lines, overlap, max_chars)
 
-    Fixed-size line windows rather than anything syntax-aware — simple and
-    language-agnostic, which is enough for the naive relevance scoring this
-    feeds (app/ai/retrieval.py). A smarter (e.g. AST-based) chunker could
-    replace this later without changing anything downstream.
+
+def _chunk_by_language(file: ProjectFile, language: Language, chunk_size: int) -> list[Chunk]:
+    if not file.content:
+        return [Chunk(path=file.path, text="", start_line=1, end_line=1)]
+
+    splitter = RecursiveCharacterTextSplitter.from_language(
+        language=language,
+        chunk_size=chunk_size,
+        chunk_overlap=settings.rag_code_chunk_overlap_chars,
+        add_start_index=True,
+    )
+    chunks = []
+    for doc in splitter.create_documents([file.content]):
+        start = doc.metadata["start_index"]
+        end = start + len(doc.page_content)
+        chunks.append(
+            Chunk(
+                path=file.path,
+                text=doc.page_content,
+                start_line=file.content.count("\n", 0, start) + 1,
+                end_line=file.content.count("\n", 0, end) + 1,
+            )
+        )
+    return chunks
+
+
+def _chunk_by_lines(
+    file: ProjectFile,
+    chunk_lines: int | None,
+    overlap: int | None,
+    max_chars: int | None,
+) -> list[Chunk]:
+    """Fixed-size line windows — the fallback for any language the splitter
+    above doesn't know yet. Simple and language-agnostic.
 
     Line count alone isn't a safe size bound — a handful of long lines
     (minified JS, a generated file, a long data literal) can still blow past
@@ -34,8 +81,7 @@ def chunk_file(
 
     A chunk's end is also nudged back to the nearest blank line within the
     overlap region, if one exists, instead of always cutting at a hard line
-    count — avoids ending a chunk mid-function/mid-class in the common case
-    (blank lines around top-level blocks is a near-universal convention).
+    count — avoids ending a chunk mid-function/mid-class in the common case.
     Only searching within the overlap region is what keeps this safe: the
     next chunk always starts there anyway, so trimming this chunk's tail
     there can never skip a line.

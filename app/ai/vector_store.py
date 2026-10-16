@@ -1,51 +1,61 @@
-import uuid
+import hashlib
 
-import chromadb
+from langchain_chroma import Chroma
+from langchain_core.documents import Document
+from langchain_openai import OpenAIEmbeddings
+
+from app.ai.chunking import chunk_file
+from app.config import settings
+from app.schemas.ingestion import ProjectFile
 
 
-def rank_by_similarity_chroma(
-    file_embeddings: dict[str, list[list[float]]],
-    query_embedding: list[float],
+def get_user_vector_store(user_id: int) -> Chroma:
+    """One persistent Chroma collection per user. Request files aren't tied to
+    a persisted project (ingestion stays stateless, Phase 7), so without
+    per-user scoping one user's search could surface another user's uploaded
+    code."""
+    embeddings = OpenAIEmbeddings(
+        model=settings.embedding_model,
+        api_key=settings.embedding_api_key,
+        base_url=settings.embedding_base_url or None,
+    )
+    return Chroma(
+        collection_name=f"user-{user_id}",
+        embedding_function=embeddings,
+        persist_directory=settings.chroma_persist_directory,
+        collection_metadata={"hnsw:space": "cosine"},
+    )
+
+
+def index_files(vector_store: Chroma, files: list[ProjectFile]) -> None:
+    """Chunk and upsert every file's chunks. Each chunk's id is a hash of its
+    path+text, so re-indexing unchanged content is a no-op (Chroma upserts by
+    id) instead of growing the collection or re-embedding on every request."""
+    documents, ids = [], []
+    for file in files:
+        for chunk in chunk_file(file):
+            if not chunk.text.strip():
+                continue
+            documents.append(Document(page_content=chunk.text, metadata={"path": file.path}))
+            ids.append(hashlib.sha256(f"{file.path}:{chunk.text}".encode()).hexdigest())
+    if documents:
+        vector_store.add_documents(documents, ids=ids)
+
+
+def search_relevant_paths(
+    vector_store: Chroma,
+    query: str,
+    available_paths: list[str],
     top_n: int,
 ) -> list[str]:
-    """Chroma-backed drop-in for rank_by_similarity (app/ai/retrieval.py) — same
-    interface, same "best chunk per file, not average" semantics, but storage and
-    nearest-neighbor search are delegated to Chroma instead of a manual numpy loop.
-
-    Ephemeral: chromadb.Client() with no path keeps everything in memory for the
-    lifetime of this call only. No persistence across requests — Phase 11's
-    in-memory version already re-embedded every request, so this doesn't lose
-    anything that existed before. Persisting chunks across requests is deferred
-    (needs a stable content identity ingestion doesn't have yet).
-    """
-    paths_with_chunks = [path for path, chunks in file_embeddings.items() if chunks]
-    if not paths_with_chunks:
-        return list(file_embeddings)[:top_n]
-
-    # chromadb.Client() shares its in-memory store across calls within a process,
-    # so each call needs its own collection name to avoid colliding with (or
-    # reusing stale data from) a previous call.
-    client = chromadb.Client()
-    collection = client.create_collection(name=f"relevance-{uuid.uuid4()}", metadata={"hnsw:space": "cosine"})
-
-    ids, embeddings, metadatas = [], [], []
-    for path in paths_with_chunks:
-        for i, chunk in enumerate(file_embeddings[path]):
-            ids.append(f"{path}::{i}")
-            embeddings.append(chunk)
-            metadatas.append({"path": path})
-    collection.add(ids=ids, embeddings=embeddings, metadatas=metadatas)
-
-    # Ask for every chunk, not just top_n — several of the nearest chunks can
-    # belong to the same file, and we want each file's single best chunk only.
-    result = collection.query(query_embeddings=[query_embedding], n_results=len(ids))
-
-    best_distance: dict[str, float] = {}
-    for metadata, distance in zip(result["metadatas"][0], result["distances"][0]):
-        path = metadata["path"]
-        if path not in best_distance or distance < best_distance[path]:
-            best_distance[path] = distance
-
-    ranked = sorted(best_distance, key=lambda path: best_distance[path])
-    missing = [path for path in file_embeddings if path not in best_distance]
-    return (ranked + missing)[:top_n]
+    """Best-matching chunk per file, restricted to this request's own files —
+    the persisted collection accumulates chunks across requests, so results
+    must be filtered back down to what's actually in play right now."""
+    results = vector_store.similarity_search_with_score(
+        query, k=max(top_n * 4, 20), filter={"path": {"$in": available_paths}}
+    )
+    ranked: list[str] = []
+    for doc, _score in sorted(results, key=lambda pair: pair[1]):
+        if doc.metadata["path"] not in ranked:
+            ranked.append(doc.metadata["path"])
+    return ranked[:top_n]

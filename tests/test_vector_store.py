@@ -1,42 +1,77 @@
-from app.ai.vector_store import rank_by_similarity_chroma
+from langchain_chroma import Chroma
+from langchain_core.embeddings import Embeddings
+
+from app.ai.vector_store import index_files, search_relevant_paths
+from app.schemas.ingestion import ProjectFile
 
 
-def test_rank_by_similarity_chroma_picks_best_matching_files():
-    query = [1.0, 0.0]
-    file_embeddings = {
-        "auth.py": [[0.9, 0.1], [0.1, 0.9]],  # best chunk closely matches query
-        "unrelated.py": [[0.0, 1.0], [-1.0, 0.0]],  # neither chunk matches
-        "users.py": [[0.5, 0.5]],  # partial match
-    }
+class _WordCountEmbeddings(Embeddings):
+    """Deterministic fake embedding — no network call. Each dimension counts
+    occurrences of one fixed vocabulary word, so texts sharing words end up
+    closer together in cosine space."""
 
-    ranked = rank_by_similarity_chroma(file_embeddings, query, top_n=2)
+    VOCAB = ["login", "logout", "render", "button", "auth", "token", "unrelated"]
 
-    assert ranked == ["auth.py", "users.py"]
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return [self._vec(t) for t in texts]
 
+    def embed_query(self, text: str) -> list[float]:
+        return self._vec(text)
 
-def test_rank_by_similarity_chroma_uses_best_chunk_not_average():
-    query = [1.0, 0.0]
-    file_embeddings = {
-        # One great chunk and one terrible chunk should still beat a file of
-        # uniformly mediocre chunks.
-        "mixed.py": [[1.0, 0.0], [-1.0, 0.0]],
-        "mediocre.py": [[0.5, 0.5], [0.5, 0.5]],
-    }
-
-    ranked = rank_by_similarity_chroma(file_embeddings, query, top_n=1)
-
-    assert ranked == ["mixed.py"]
+    def _vec(self, text: str) -> list[float]:
+        lowered = text.lower()
+        return [float(lowered.count(word)) for word in self.VOCAB]
 
 
-def test_rank_by_similarity_chroma_handles_file_with_no_chunks():
-    # An empty file (or one whose only chunk was filtered out as blank) has no
-    # chunks to score — it should rank last, not crash on an empty query.
-    query = [1.0, 0.0]
-    file_embeddings = {
-        "empty.py": [],
-        "real.py": [[0.0, 1.0]],
-    }
+def _vector_store(tmp_path, name="test") -> Chroma:
+    return Chroma(
+        collection_name=name,
+        embedding_function=_WordCountEmbeddings(),
+        persist_directory=str(tmp_path),
+        collection_metadata={"hnsw:space": "cosine"},
+    )
 
-    ranked = rank_by_similarity_chroma(file_embeddings, query, top_n=2)
 
-    assert ranked == ["real.py", "empty.py"]
+def test_index_files_then_search_returns_best_matching_file(tmp_path):
+    vector_store = _vector_store(tmp_path)
+    files = [
+        ProjectFile(path="auth.py", content="def login(user, token): pass"),
+        ProjectFile(path="ui.py", content="def render_button(): pass"),
+    ]
+    index_files(vector_store, files)
+
+    ranked = search_relevant_paths(vector_store, "login token auth", ["auth.py", "ui.py"], top_n=2)
+
+    assert ranked[0] == "auth.py"
+
+
+def test_search_relevant_paths_only_considers_available_paths(tmp_path):
+    vector_store = _vector_store(tmp_path, name="scoped")
+    files = [
+        ProjectFile(path="auth.py", content="def login(user, token): pass"),
+        ProjectFile(path="other_auth.py", content="def login(user, token): pass"),
+    ]
+    index_files(vector_store, files)
+
+    ranked = search_relevant_paths(vector_store, "login token", ["auth.py"], top_n=5)
+
+    assert ranked == ["auth.py"]
+
+
+def test_index_files_is_idempotent_for_unchanged_content(tmp_path):
+    vector_store = _vector_store(tmp_path, name="idempotent")
+    files = [ProjectFile(path="auth.py", content="def login(): pass")]
+
+    index_files(vector_store, files)
+    index_files(vector_store, files)  # re-indexing unchanged content shouldn't duplicate
+
+    assert vector_store._collection.count() == 1
+
+
+def test_index_files_skips_blank_chunks(tmp_path):
+    vector_store = _vector_store(tmp_path, name="blank")
+    files = [ProjectFile(path="empty.py", content="")]
+
+    index_files(vector_store, files)
+
+    assert vector_store._collection.count() == 0

@@ -14,7 +14,8 @@ def verify_password(password: str, hashed_password: str) -> bool:
 
 def create_access_token(data: dict) -> str:
     # Expiry intentionally disabled while the app is still under active development
-    # (tokens never expire) — re-enable before shipping by adding back:
+    # (tokens never expire) — re-enable before shipping by adding back an
+    # access_token_expire_minutes setting and:
     #   "exp": datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
     return jwt.encode(data, settings.secret_key, algorithm=settings.algorithm)
 
