@@ -6,5 +6,8 @@ bcrypt
 email-validator
 pyjwt
 openai>=3.0
-numpy
+langchain
+langchain-openai
+langchain-chroma
+langchain-text-splitters
 pytest
