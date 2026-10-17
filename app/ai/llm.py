@@ -2,6 +2,7 @@ from typing import Literal
 
 from openai import OpenAI
 
+from app.colors import LLM, RESET
 from app.config import settings
 
 # Delimiter the model's fix-mode reply uses to mark a file boundary — a plain
@@ -29,12 +30,15 @@ def _fix_prompt(content: str, instruction: str | None) -> str:
 
 
 def get_chat_response(message: str) -> str:
+    print(f"{LLM}[llm] chat completion call → model={settings.openai_model}, message_chars={len(message)}{RESET}")
     client = OpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url or None)
     completion = client.chat.completions.create(
         model=settings.openai_model,
         messages=[{"role": "user", "content": message}],
     )
-    return completion.choices[0].message.content
+    reply = completion.choices[0].message.content
+    print(f"{LLM}[llm] chat completion response ({len(reply)} chars):\n{'-' * 60}\n{reply}\n{'-' * 60}{RESET}")
+    return reply
 
 
 def strip_code_fence(text: str) -> str:

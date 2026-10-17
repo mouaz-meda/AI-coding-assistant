@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from app.ai.llm import FILE_MARKER
 from app.ai.vector_store import get_user_vector_store, index_files, search_relevant_paths
+from app.colors import AGENT, RESET
 from app.config import settings
 from app.schemas.ingestion import ProjectFile
 
@@ -41,7 +42,9 @@ def _build_tools(
         Returns a ranked list of file paths. Use this to narrow down which
         files to look at before reading them in full.
         """
-        return search_relevant_paths(vector_store, query, search_paths, top_n)
+        result = search_relevant_paths(vector_store, query, search_paths, top_n)
+        print(f"{AGENT}[agent] tool call: search_files(query={query!r}, top_n={top_n}) → {result}{RESET}")
+        return result
 
     @tool
     def read_file(path: str) -> str:
@@ -49,7 +52,9 @@ def _build_tools(
         the pre-selected files — any path from the available-files list works."""
         content = files_by_path.get(path)
         if content is None:
+            print(f"{AGENT}[agent] tool call: read_file(path={path!r}) → not found{RESET}")
             return f"No file at path '{path}'. Available paths: {', '.join(files_by_path)}"
+        print(f"{AGENT}[agent] tool call: read_file(path={path!r}) → {len(content)} chars{RESET}")
         read_paths.append(path)
         return content
 
@@ -79,8 +84,10 @@ def _select_candidate_paths(paths: list[str], action: str, instruction: str, top
     off from a file it turns out to need.
     """
     if len(paths) <= top_n:
+        print(f"{AGENT}[agent] path-selection call skipped — only {len(paths)} file(s), top_n={top_n}{RESET}")
         return paths
 
+    print(f"{AGENT}[agent] path-selection call → model={settings.openai_model}, {len(paths)} candidate paths{RESET}")
     selector = _build_chat_model().with_structured_output(_PathSelection)
     prompt = (
         f"Action: {action}\nInstruction: {instruction}\n\n"
@@ -90,6 +97,7 @@ def _select_candidate_paths(paths: list[str], action: str, instruction: str, top
     )
     result = selector.invoke(prompt)
     selected = [p for p in result.paths if p in paths][:top_n]
+    print(f"{AGENT}[agent] path-selection result → {selected or paths}{RESET}")
     return selected or paths
 
 
@@ -106,6 +114,7 @@ def run_agentic_review(
     candidate_files = [f for f in files if f.path in candidate_paths]
 
     vector_store = get_user_vector_store(user_id)
+    print(f"{AGENT}[agent] indexing {len(candidate_files)} candidate file(s) for user {user_id}{RESET}")
     index_files(vector_store, candidate_files)
 
     read_paths: list[str] = []
@@ -114,6 +123,10 @@ def run_agentic_review(
     agent = create_agent(model=_build_chat_model(), tools=tools, system_prompt=AGENT_SYSTEM_PROMPT)
 
     file_list = "\n".join(files_by_path)
+    print(
+        f"{AGENT}[agent] invoking agent → action={action}, files={len(files)}, "
+        f"recursion_limit={settings.agent_recursion_limit}{RESET}"
+    )
     result = agent.invoke(
         {
             "messages": [
@@ -126,4 +139,9 @@ def run_agentic_review(
         },
         config={"recursion_limit": settings.agent_recursion_limit},
     )
-    return result["messages"][-1].content, read_paths
+    reply = result["messages"][-1].content
+    print(
+        f"{AGENT}[agent] final answer ({len(reply)} chars, read_paths={read_paths}):\n"
+        f"{'-' * 60}\n{reply}\n{'-' * 60}{RESET}"
+    )
+    return reply, read_paths
