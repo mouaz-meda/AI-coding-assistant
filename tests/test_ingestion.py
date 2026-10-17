@@ -48,6 +48,23 @@ def test_filter_files_skips_binary_and_oversized(monkeypatch):
     assert "larger than" in reasons["big.txt"]
 
 
+def test_filter_files_skips_env_files():
+    files = [
+        ProjectFile(path=".env", content="API_KEY=secret"),
+        ProjectFile(path="config/.env.production", content="API_KEY=secret"),
+        ProjectFile(path=".env.example", content="API_KEY="),
+        ProjectFile(path="main.py", content="print('hi')"),
+    ]
+
+    result = filter_files(files)
+
+    assert [f.path for f in result.accepted] == ["main.py"]
+    reasons = skipped_reasons(result)
+    assert reasons[".env"] == "potentially sensitive file (.env)"
+    assert reasons["config/.env.production"] == "potentially sensitive file (.env)"
+    assert reasons[".env.example"] == "potentially sensitive file (.env)"
+
+
 def test_filter_files_rejects_too_many(monkeypatch):
     monkeypatch.setattr(settings, "max_files", 1)
     files = [ProjectFile(path="a.py", content=""), ProjectFile(path="b.py", content="")]
@@ -118,6 +135,13 @@ def test_read_file_rejects_oversized_or_binary(monkeypatch, tmp_path):
         read_file(tmp_path, "big.txt")
     with pytest.raises(FileRejectedError):
         read_file(tmp_path, "logo.png")
+
+
+def test_read_file_rejects_env_file(tmp_path):
+    (tmp_path / ".env").write_text("API_KEY=secret")
+
+    with pytest.raises(FileRejectedError):
+        read_file(tmp_path, ".env")
 
 
 def test_read_file_missing_or_escaping_path_not_found(tmp_path):
