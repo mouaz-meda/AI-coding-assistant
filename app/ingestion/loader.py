@@ -10,7 +10,10 @@ SKIP_DIRS = {".git", ".venv", "venv", "node_modules", "__pycache__", ".idea", ".
 
 def _is_sensitive_filename(filename: str) -> bool:
     """.env and its variants (.env.local, .env.production, ...) carry real
-    secrets and must never be chunked, embedded, or sent to an LLM."""
+    secrets and must never be chunked, embedded, or sent to an LLM.
+    .env.example is a template with no real secrets, so it's let through."""
+    if filename == ".env.example":
+        return False
     return filename == ".env" or filename.startswith(".env.")
 
 
