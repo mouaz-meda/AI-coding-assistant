@@ -62,7 +62,7 @@ The high-level roadmap is:
 10. Multi-file feature requests (naive: all ingested files in context)
 11. RAG pipeline (chunking, embeddings, retrieval) — to scale item 10 past context limits
 12. Vector database
-13. Agentic tool-calling loop, with LangChain integration where it earns its place
+13. Agentic tool-calling loop, using LangChain
 14. Testing, error handling, logging, and production improvements
 
 Do not implement the entire roadmap at once.
@@ -135,15 +135,11 @@ Before introducing a significant dependency, briefly explain why it is needed an
 
 When implementing AI functionality, keep the underlying concepts understandable.
 
-Do not hide important concepts behind LangChain or other abstractions unnecessarily.
-
-When practical, understand and implement the fundamental flow before adding framework abstractions.
-
 For RAG, keep the concepts explicit:
 
 Document → Chunking → Embeddings → Vector Storage → Retrieval → Context → LLM → Response
 
-Use LangChain where it provides meaningful value, not simply because it is available.
+Rely on LangChain when possible and avoid reinventing functionality it already provides — this also builds real fluency with LangChain, which is one of this project's own learning goals.
 
 ---
 
