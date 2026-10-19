@@ -155,6 +155,54 @@ def test_run_agentic_review_stops_immediately_when_no_tool_call():
     assert read_paths == []
 
 
+def test_run_agentic_review_fix_returns_structured_edits():
+    files = [ProjectFile(path="a.py", content="x = 1\n"), ProjectFile(path="b.py", content="y = 2\n")]
+    responses = [
+        AIMessage(
+            content="",
+            tool_calls=[
+                {
+                    "name": "FixEdits",
+                    "args": {"edits": [{"path": "a.py", "content": "x = 2\n"}]},
+                    "id": "call_1",
+                }
+            ],
+        )
+    ]
+
+    edits, _ = _run_with_responses(responses, files, action="fix", candidate_paths=["a.py", "b.py"])
+
+    assert len(edits) == 1
+    assert edits[0].path == "a.py"
+    assert edits[0].output == "x = 2\n"
+    assert "+x = 2" in edits[0].diff
+
+
+def test_run_agentic_review_fix_skips_unknown_and_unchanged_files():
+    files = [ProjectFile(path="a.py", content="x = 1\n")]
+    responses = [
+        AIMessage(
+            content="",
+            tool_calls=[
+                {
+                    "name": "FixEdits",
+                    "args": {
+                        "edits": [
+                            {"path": "a.py", "content": "x = 1\n"},  # unchanged
+                            {"path": "unknown.py", "content": "z = 1\n"},  # not in request
+                        ]
+                    },
+                    "id": "call_1",
+                }
+            ],
+        )
+    ]
+
+    edits, _ = _run_with_responses(responses, files, action="fix", candidate_paths=["a.py"])
+
+    assert edits == []
+
+
 def test_run_agentic_review_raises_when_recursion_limit_exceeded(monkeypatch):
     from app.config import settings
 

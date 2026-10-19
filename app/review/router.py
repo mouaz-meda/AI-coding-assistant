@@ -6,7 +6,6 @@ from app.auth.dependencies import get_current_user
 from app.colors import RESET, REVIEW
 from app.models.user import User
 from app.review.diff import make_diff
-from app.review.multi import parse_file_edits
 from app.schemas.review import MultiReviewRequest, MultiReviewResponse, ReviewRequest, ReviewResponse
 
 router = APIRouter(tags=["review"])
@@ -36,16 +35,14 @@ def review_multi(request: MultiReviewRequest, current_user: User = Depends(get_c
         f"{REVIEW}[review] POST /review/multi → user={current_user.id}, "
         f"files={len(request.files)}, action={request.action}{RESET}"
     )
-    reply, considered = run_agentic_review(current_user.id, request.files, request.action, request.instruction)
+    result, considered = run_agentic_review(current_user.id, request.files, request.action, request.instruction)
     if request.action == "review":
         print(f"{REVIEW}[review] POST /review/multi → considered={considered}{RESET}")
         return MultiReviewResponse(
-            action="review", instruction=request.instruction, output=reply, considered_files=considered
+            action="review", instruction=request.instruction, output=result, considered_files=considered
         )
 
-    originals = {f.path: f.content for f in request.files}
-    edits = parse_file_edits(reply, originals)
-    print(f"{REVIEW}[review] POST /review/multi → edits={[e.path for e in edits]}, considered={considered}{RESET}")
+    print(f"{REVIEW}[review] POST /review/multi → edits={[e.path for e in result]}, considered={considered}{RESET}")
     return MultiReviewResponse(
-        action="fix", instruction=request.instruction, edits=edits, considered_files=considered
+        action="fix", instruction=request.instruction, edits=result, considered_files=considered
     )

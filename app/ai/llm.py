@@ -1,15 +1,9 @@
 from typing import Literal
 
-from openai import OpenAI
+from langchain_openai import ChatOpenAI
 
 from app.colors import LLM, RESET
 from app.config import settings
-
-# Delimiter the model's fix-mode reply uses to mark a file boundary — a plain
-# text marker avoids the escaping headaches of asking the model to return code
-# inside JSON. Shared with app/ai/agent.py's system prompt and
-# app/review/multi.py's parser.
-FILE_MARKER = "=== {path} ==="
 
 
 def _review_prompt(content: str, instruction: str | None) -> str:
@@ -31,12 +25,12 @@ def _fix_prompt(content: str, instruction: str | None) -> str:
 
 def get_chat_response(message: str) -> str:
     print(f"{LLM}[llm] chat completion call → model={settings.openai_model}, message_chars={len(message)}{RESET}")
-    client = OpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url or None)
-    completion = client.chat.completions.create(
+    model = ChatOpenAI(
         model=settings.openai_model,
-        messages=[{"role": "user", "content": message}],
+        api_key=settings.openai_api_key,
+        base_url=settings.openai_base_url or None,
     )
-    reply = completion.choices[0].message.content
+    reply = model.invoke(message).content
     print(f"{LLM}[llm] chat completion response ({len(reply)} chars):\n{'-' * 60}\n{reply}\n{'-' * 60}{RESET}")
     return reply
 

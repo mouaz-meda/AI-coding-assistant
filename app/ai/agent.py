@@ -6,11 +6,12 @@ from langchain_chroma import Chroma
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 
-from app.ai.llm import FILE_MARKER
 from app.ai.vector_store import get_user_vector_store, index_files, search_relevant_paths
 from app.colors import AGENT, RESET
 from app.config import settings
+from app.review.diff import make_diff
 from app.schemas.ingestion import ProjectFile
+from app.schemas.review import FileEdit
 
 AGENT_SYSTEM_PROMPT = (
     "You are an autonomous code-editing assistant working across a multi-file "
@@ -18,15 +19,25 @@ AGENT_SYSTEM_PROMPT = (
     "to find files relevant to the instruction, then read_file to see a file's "
     "full content before referencing or changing it. Never guess at a file's "
     "content without reading it first.\n\n"
-    "When you are ready to give your final answer, stop calling tools and reply "
-    "with plain text only:\n"
-    '- For a "review": describe your findings as plain text, referencing file '
-    "paths where relevant. Do not rewrite any file.\n"
-    '- For a "fix": only include files whose content actually changed. For each '
-    f'changed file, output a line exactly as {FILE_MARKER.format(path="<path>")} '
-    "followed by the file's full new content. Do not include unchanged files, "
-    "explanations, commentary, or markdown code fences."
+    "When you are ready to give your final answer, stop calling tools:\n"
+    '- For a "review": reply with plain text describing your findings, '
+    "referencing file paths where relevant. Do not rewrite any file.\n"
+    '- For a "fix": submit your final answer through the structured response '
+    "tool, including only the files whose content actually changed, each with "
+    "its full new content."
 )
+
+
+class FileFix(BaseModel):
+    path: str
+    content: str
+
+
+class FixEdits(BaseModel):
+    """Final answer for a "fix" action — the full new content of every file
+    whose content actually changed. Do not include unchanged files."""
+
+    edits: list[FileFix]
 
 
 def _build_tools(
@@ -106,9 +117,10 @@ def run_agentic_review(
     files: list[ProjectFile],
     action: Literal["review", "fix"],
     instruction: str,
-) -> tuple[str, list[str]]:
+) -> tuple[str | list[FileEdit], list[str]]:
     """Let the model drive retrieval itself via tool calls instead of us
-    picking files upfront. Returns (final reply text, paths actually read)."""
+    picking files upfront. Returns (review text, or fix edits; paths actually
+    read)."""
     files_by_path = {f.path: f.content for f in files}
     candidate_paths = _select_candidate_paths(list(files_by_path), action, instruction, settings.rag_top_files)
     candidate_files = [f for f in files if f.path in candidate_paths]
@@ -120,7 +132,12 @@ def run_agentic_review(
     read_paths: list[str] = []
     tools = _build_tools(vector_store, files_by_path, candidate_paths, read_paths)
 
-    agent = create_agent(model=_build_chat_model(), tools=tools, system_prompt=AGENT_SYSTEM_PROMPT)
+    agent = create_agent(
+        model=_build_chat_model(),
+        tools=tools,
+        system_prompt=AGENT_SYSTEM_PROMPT,
+        response_format=FixEdits if action == "fix" else None,
+    )
 
     file_list = "\n".join(files_by_path)
     print(
@@ -139,9 +156,28 @@ def run_agentic_review(
         },
         config={"recursion_limit": settings.agent_recursion_limit},
     )
+
+    if action == "fix":
+        edits = _build_edits(result["structured_response"].edits, files_by_path)
+        print(f"{AGENT}[agent] final edits (read_paths={read_paths}): {[e.path for e in edits]}{RESET}")
+        return edits, read_paths
+
     reply = result["messages"][-1].content
     print(
         f"{AGENT}[agent] final answer ({len(reply)} chars, read_paths={read_paths}):\n"
         f"{'-' * 60}\n{reply}\n{'-' * 60}{RESET}"
     )
     return reply, read_paths
+
+
+def _build_edits(fixes: list[FileFix], files_by_path: dict[str, str]) -> list[FileEdit]:
+    """Drop files the model referenced that aren't in the request, and files
+    whose content didn't actually change — the model's own judgment of
+    "changed" isn't trusted blindly."""
+    edits = []
+    for fix in fixes:
+        original = files_by_path.get(fix.path)
+        if original is None or fix.content.rstrip("\n") == original.rstrip("\n"):
+            continue
+        edits.append(FileEdit(path=fix.path, output=fix.content, diff=make_diff(fix.path, original, fix.content)))
+    return edits
