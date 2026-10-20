@@ -15,16 +15,21 @@ from app.schemas.review import FileEdit
 
 AGENT_SYSTEM_PROMPT = (
     "You are an autonomous code-editing assistant working across a multi-file "
-    "project. You do not see file contents up front — use the search_files tool "
-    "to find files relevant to the instruction, then read_file to see a file's "
-    "full content before referencing or changing it. Never guess at a file's "
-    "content without reading it first.\n\n"
+    "project. The full content of the file(s) most likely relevant to this "
+    "instruction is already included in the user message below — that content "
+    "is final, never call a tool to re-read one of those files. If you need a "
+    "file not shown there, use search_files to find it among the request's "
+    "other files, then read_file to see its full content before referencing or "
+    "changing it. Never guess at a file's content without reading it first, "
+    "and never call the same tool with the same arguments more than once.\n\n"
     "When you are ready to give your final answer, stop calling tools:\n"
     '- For a "review": reply with plain text describing your findings, '
     "referencing file paths where relevant. Do not rewrite any file.\n"
-    '- For a "fix": submit your final answer through the structured response '
-    "tool, including only the files whose content actually changed, each with "
-    "its full new content."
+    '- For a "fix": submit your final answer with exactly ONE call to the '
+    "structured response tool, whose edits list contains every changed file "
+    "as one item each — never call it more than once, and never call it "
+    "separately per file. Include only files whose content actually changed, "
+    "each with its full new content."
 )
 
 
@@ -66,7 +71,8 @@ def _build_tools(
             print(f"{AGENT}[agent] tool call: read_file(path={path!r}) → not found{RESET}")
             return f"No file at path '{path}'. Available paths: {', '.join(files_by_path)}"
         print(f"{AGENT}[agent] tool call: read_file(path={path!r}) → {len(content)} chars{RESET}")
-        read_paths.append(path)
+        if path not in read_paths:  # already preloaded or already read — don't double-count
+            read_paths.append(path)
         return content
 
     return [search_files, read_file]
@@ -118,19 +124,29 @@ def run_agentic_review(
     action: Literal["review", "fix"],
     instruction: str,
 ) -> tuple[str | list[FileEdit], list[str]]:
-    """Let the model drive retrieval itself via tool calls instead of us
-    picking files upfront. Returns (review text, or fix edits; paths actually
-    read)."""
+    """Feeds the model the pre-selected candidates' content directly (no tool
+    round trip needed to fetch what we already loaded into memory to index
+    them), while still letting it drive retrieval itself via tool calls for
+    anything outside that set. Returns (review text, or fix edits; paths
+    actually considered)."""
     files_by_path = {f.path: f.content for f in files}
     candidate_paths = _select_candidate_paths(list(files_by_path), action, instruction, settings.rag_top_files)
     candidate_files = [f for f in files if f.path in candidate_paths]
+    other_paths = [p for p in files_by_path if p not in candidate_paths]
 
     vector_store = get_user_vector_store(user_id)
     print(f"{AGENT}[agent] indexing {len(candidate_files)} candidate file(s) for user {user_id}{RESET}")
     index_files(vector_store, candidate_files)
 
-    read_paths: list[str] = []
-    tools = _build_tools(vector_store, files_by_path, candidate_paths, read_paths)
+    # Seeded with the candidates: their content is handed to the model below,
+    # so they're already "considered" without a read_file round trip.
+    read_paths: list[str] = list(candidate_paths)
+    # Confirmed against the real model (not guessed): handing it search_files/
+    # read_file when every file is already preloaded below tempts it into
+    # redundantly re-reading files it already has, looping until the
+    # recursion limit is hit instead of ever answering. No other_paths means
+    # there is nothing those tools could usefully reach, so skip binding them.
+    tools = _build_tools(vector_store, files_by_path, candidate_paths, read_paths) if other_paths else []
 
     agent = create_agent(
         model=_build_chat_model(),
@@ -139,18 +155,23 @@ def run_agentic_review(
         response_format=FixEdits if action == "fix" else None,
     )
 
-    file_list = "\n".join(files_by_path)
+    candidate_block = "\n\n".join(f"=== {f.path} ===\n{f.content}" for f in candidate_files)
     print(
         f"{AGENT}[agent] invoking agent → action={action}, files={len(files)}, "
-        f"recursion_limit={settings.agent_recursion_limit}{RESET}"
+        f"preloaded={len(candidate_files)}, recursion_limit={settings.agent_recursion_limit}{RESET}"
     )
     result = agent.invoke(
         {
             "messages": [
                 {
                     "role": "user",
-                    "content": f"Action: {action}\nInstruction: {instruction}\n\n"
-                    f"Available files ({len(files)}):\n{file_list}",
+                    "content": (
+                        f"Action: {action}\nInstruction: {instruction}\n\n"
+                        f"Full content of the file(s) most likely relevant to this "
+                        f"instruction:\n\n{candidate_block}\n\n"
+                        "Other files in this request (use read_file by exact path if "
+                        f"you need one): {', '.join(other_paths) if other_paths else '(none)'}"
+                    ),
                 }
             ]
         },
@@ -159,12 +180,12 @@ def run_agentic_review(
 
     if action == "fix":
         edits = _build_edits(result["structured_response"].edits, files_by_path)
-        print(f"{AGENT}[agent] final edits (read_paths={read_paths}): {[e.path for e in edits]}{RESET}")
+        print(f"{AGENT}[agent] final edits (considered={read_paths}): {[e.path for e in edits]}{RESET}")
         return edits, read_paths
 
     reply = result["messages"][-1].content
     print(
-        f"{AGENT}[agent] final answer ({len(reply)} chars, read_paths={read_paths}):\n"
+        f"{AGENT}[agent] final answer ({len(reply)} chars, considered={read_paths}):\n"
         f"{'-' * 60}\n{reply}\n{'-' * 60}{RESET}"
     )
     return reply, read_paths

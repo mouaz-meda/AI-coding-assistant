@@ -37,7 +37,8 @@ class MultiReviewResponse(BaseModel):
     instruction: str
     output: str | None = None
     edits: list[FileEdit] = []
-    # Which files the agent actually called read_file on — a subset of what it
-    # searched, decided by the model itself rather than a fixed pre-filter.
-    # Surfaced so retrieval stays visible, not hidden.
+    # Which files' content actually informed the agent's answer: the
+    # pre-selected candidates (preloaded, no tool call needed) plus any extra
+    # files it fetched itself via read_file. Surfaced so retrieval stays
+    # visible, not hidden.
     considered_files: list[str] = []

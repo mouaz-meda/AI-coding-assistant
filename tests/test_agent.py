@@ -119,7 +119,8 @@ def test_run_agentic_review_read_file_reaches_a_non_candidate_file():
     reply, read_paths = _run_with_responses(responses, files, candidate_paths=["a.py"])
 
     assert reply == "b.py looks fine."
-    assert read_paths == ["b.py"]
+    # a.py was preloaded (it's the candidate); b.py was fetched via read_file.
+    assert read_paths == ["a.py", "b.py"]
 
 
 def test_select_candidate_paths_skips_the_model_call_when_within_top_n():
@@ -132,19 +133,6 @@ def test_select_candidate_paths_skips_the_model_call_when_within_top_n():
     assert result == ["a.py", "b.py"]
 
 
-def test_run_agentic_review_executes_read_file_then_returns_final_answer():
-    files = [ProjectFile(path="a.py", content="x = 1\n")]
-    responses = [
-        AIMessage(content="", tool_calls=[{"name": "read_file", "args": {"path": "a.py"}, "id": "call_1"}]),
-        AIMessage(content="x = 1 looks fine."),
-    ]
-
-    reply, read_paths = _run_with_responses(responses, files)
-
-    assert reply == "x = 1 looks fine."
-    assert read_paths == ["a.py"]
-
-
 def test_run_agentic_review_stops_immediately_when_no_tool_call():
     files = [ProjectFile(path="a.py", content="x = 1\n")]
     responses = [AIMessage(content="No files needed looking at.")]
@@ -152,7 +140,9 @@ def test_run_agentic_review_stops_immediately_when_no_tool_call():
     reply, read_paths = _run_with_responses(responses, files)
 
     assert reply == "No files needed looking at."
-    assert read_paths == []
+    # a.py is the only (and therefore candidate) file — its content is
+    # preloaded, so it's "considered" even with zero tool calls.
+    assert read_paths == ["a.py"]
 
 
 def test_run_agentic_review_fix_returns_structured_edits():
@@ -203,17 +193,48 @@ def test_run_agentic_review_fix_skips_unknown_and_unchanged_files():
     assert edits == []
 
 
+def test_run_agentic_review_fix_multiple_files_needs_no_read_file_round_trip():
+    # Before the preload fix, the agent needed one read_file round trip per
+    # candidate file before it could finalize, so a multi-file fix burned
+    # recursion budget proportional to file count (and could exceed the
+    # limit). Candidate content is now handed over directly, so finishing in
+    # a single round trip regardless of file count is what proves the fix.
+    files = [ProjectFile(path=f"f{i}.py", content=f"x = {i}\n") for i in range(5)]
+    responses = [
+        AIMessage(
+            content="",
+            tool_calls=[
+                {
+                    "name": "FixEdits",
+                    "args": {"edits": [{"path": "f0.py", "content": "x = 100\n"}]},
+                    "id": "call_1",
+                }
+            ],
+        )
+    ]
+
+    edits, considered = _run_with_responses(
+        responses, files, action="fix", candidate_paths=[f.path for f in files]
+    )
+
+    assert [e.path for e in edits] == ["f0.py"]
+    assert considered == [f.path for f in files]
+
+
 def test_run_agentic_review_raises_when_recursion_limit_exceeded(monkeypatch):
     from app.config import settings
 
     monkeypatch.setattr(settings, "agent_recursion_limit", 2)
-    files = [ProjectFile(path="a.py", content="x = 1\n")]
+    # b.py is outside the candidate set (forced via candidate_paths below), so
+    # the tools are actually bound — only then can endless read_file calls
+    # exercise the recursion limit at all.
+    files = [ProjectFile(path="a.py", content="x = 1\n"), ProjectFile(path="b.py", content="y = 2\n")]
 
     def endless():
         while True:
             yield AIMessage(
-                content="", tool_calls=[{"name": "read_file", "args": {"path": "a.py"}, "id": "call_x"}]
+                content="", tool_calls=[{"name": "read_file", "args": {"path": "b.py"}, "id": "call_x"}]
             )
 
     with pytest.raises(GraphRecursionError):
-        _run_with_responses(list(itertools.islice(endless(), 10)), files)
+        _run_with_responses(list(itertools.islice(endless(), 10)), files, candidate_paths=["a.py"])
