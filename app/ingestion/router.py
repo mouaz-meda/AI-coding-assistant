@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.auth.dependencies import get_current_user
+from app.colors import INGEST, RESET
 from app.config import settings
 from app.ingestion.loader import (
     FileRejectedError,
@@ -37,15 +38,19 @@ def to_summary(result: IngestResult) -> IngestSummary:
 
 @router.post("/upload", response_model=IngestSummary)
 def ingest_upload(request: UploadRequest, current_user: User = Depends(get_current_user)):
+    print(f"{INGEST}[ingest] POST /ingest/upload → user={current_user.id}, files={len(request.files)}{RESET}")
     try:
         result = filter_files(request.files)
     except TooManyFilesError as error:
         raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail=str(error))
-    return to_summary(result)
+    summary = to_summary(result)
+    print(f"{INGEST}[ingest] POST /ingest/upload → accepted={summary.total_accepted}, skipped={summary.total_skipped}{RESET}")
+    return summary
 
 
 @router.post("/path", response_model=IngestSummary)
 def ingest_path(request: PathRequest, current_user: User = Depends(get_current_user)):
+    print(f"{INGEST}[ingest] POST /ingest/path → user={current_user.id}, path={request.path!r}{RESET}")
     if not settings.ingest_root:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -64,11 +69,17 @@ def ingest_path(request: PathRequest, current_user: User = Depends(get_current_u
         result = load_directory(directory)
     except TooManyFilesError as error:
         raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail=str(error))
-    return to_summary(result)
+    summary = to_summary(result)
+    print(f"{INGEST}[ingest] POST /ingest/path → accepted={summary.total_accepted}, skipped={summary.total_skipped}{RESET}")
+    return summary
 
 
 @router.post("/path/file", response_model=ProjectFile)
 def ingest_path_file(request: PathFileRequest, current_user: User = Depends(get_current_user)):
+    print(
+        f"{INGEST}[ingest] POST /ingest/path/file → user={current_user.id}, "
+        f"path={request.path!r}, file={request.file!r}{RESET}"
+    )
     if not settings.ingest_root:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -77,7 +88,9 @@ def ingest_path_file(request: PathFileRequest, current_user: User = Depends(get_
 
     try:
         directory = resolve_within_root(settings.ingest_root, request.path)
-        return read_file(directory, request.file)
+        file = read_file(directory, request.file)
+        print(f"{INGEST}[ingest] POST /ingest/path/file → {len(file.content)} chars{RESET}")
+        return file
     except PathNotAllowedError as error:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(error))
     except FileNotFoundError:

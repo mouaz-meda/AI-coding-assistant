@@ -19,19 +19,15 @@ class Settings(BaseSettings):
     ingest_root: str = ""
     max_file_bytes: int = 200_000
     max_files: int = 1000
-    # Naive RAG (Phase 11): chunk size/overlap for scoring file relevance, and how
-    # many of the most relevant files a multi-file request actually sends to the LLM.
-    rag_chunk_lines: int = 40
-    rag_chunk_overlap: int = 5
+    # Naive RAG (Phase 11): chunk size for scoring file relevance, and how many
+    # of the most relevant files a multi-file request actually sends to the LLM.
     # ~1000 tokens for most tokenizers — safely under an 8192-token embedding
-    # limit even for dense/minified code, regardless of how long individual
-    # lines are (rag_chunk_lines alone doesn't bound that).
+    # limit even for dense/minified code.
     rag_chunk_max_chars: int = 4000
     rag_top_files: int = 5
-    # LangChain's code-aware splitter's overlap, in characters (vs.
-    # rag_chunk_overlap's line-count, used only by the generic fallback
-    # splitter for languages the code splitter doesn't know).
-    rag_code_chunk_overlap_chars: int = 200
+    # LangChain's RecursiveCharacterTextSplitter's overlap, in characters —
+    # shared by both the code-aware splitter and the generic fallback.
+    rag_chunk_overlap_chars: int = 200
     # Phase 12 (LangChain/Chroma): persistent, per-user vector store location.
     chroma_persist_directory: str = "./data/chroma"
     # Phase 13 (LangChain agent): langgraph recursion limit on the tool-calling

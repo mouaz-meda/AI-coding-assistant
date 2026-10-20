@@ -5,6 +5,7 @@ from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
 
 from app.ai.chunking import chunk_file
+from app.colors import RESET, VECTOR_STORE
 from app.config import settings
 from app.schemas.ingestion import ProjectFile
 
@@ -39,7 +40,12 @@ def index_files(vector_store: Chroma, files: list[ProjectFile]) -> None:
             documents.append(Document(page_content=chunk.text, metadata={"path": file.path}))
             ids.append(hashlib.sha256(f"{file.path}:{chunk.text}".encode()).hexdigest())
     if documents:
+        print(f"{VECTOR_STORE}[vector_store] embedding + upserting {len(documents)} chunk(s) from {len(files)} file(s):{RESET}")
+        for doc, doc_id in zip(documents, ids):
+            print(f"{VECTOR_STORE}    {doc.metadata['path']}  ({len(doc.page_content)} chars)  id={doc_id[:8]}{RESET}")
         vector_store.add_documents(documents, ids=ids)
+    else:
+        print(f"{VECTOR_STORE}[vector_store] no chunks to index from {len(files)} file(s){RESET}")
 
 
 def search_relevant_paths(
@@ -58,4 +64,8 @@ def search_relevant_paths(
     for doc, _score in sorted(results, key=lambda pair: pair[1]):
         if doc.metadata["path"] not in ranked:
             ranked.append(doc.metadata["path"])
+    print(
+        f"{VECTOR_STORE}[vector_store] similarity search query={query!r} over "
+        f"{len(available_paths)} path(s) → {ranked[:top_n]}{RESET}"
+    )
     return ranked[:top_n]

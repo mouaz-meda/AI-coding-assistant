@@ -8,6 +8,15 @@ from app.schemas.ingestion import ProjectFile, SkippedFile
 SKIP_DIRS = {".git", ".venv", "venv", "node_modules", "__pycache__", ".idea", ".next", "dist", "build"}
 
 
+def _is_sensitive_filename(filename: str) -> bool:
+    """.env and its variants (.env.local, .env.production, ...) carry real
+    secrets and must never be chunked, embedded, or sent to an LLM.
+    .env.example is a template with no real secrets, so it's let through."""
+    if filename == ".env.example":
+        return False
+    return filename == ".env" or filename.startswith(".env.")
+
+
 class TooManyFilesError(Exception):
     pass
 
@@ -28,7 +37,10 @@ class IngestResult:
 
 def check_file(path: str, data: bytes) -> str | None:
     """Return the reason a file must be skipped, or None if it is usable text."""
-    for part in path.replace("\\", "/").split("/")[:-1]:
+    segments = path.replace("\\", "/").split("/")
+    if _is_sensitive_filename(segments[-1]):
+        return "potentially sensitive file (.env)"
+    for part in segments[:-1]:
         if part in SKIP_DIRS:
             return f"inside skipped directory '{part}'"
     if len(data) > settings.max_file_bytes:

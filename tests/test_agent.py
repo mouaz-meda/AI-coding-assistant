@@ -1,4 +1,5 @@
 import itertools
+from contextlib import ExitStack
 from unittest.mock import patch
 
 import pytest
@@ -20,19 +21,26 @@ class FakeToolCallingModel(GenericFakeChatModel):
         return self
 
 
-def _run_with_responses(responses, files, action="review", instruction="check it"):
+def _run_with_responses(responses, files, action="review", instruction="check it", candidate_paths=None):
     model = FakeToolCallingModel(messages=iter(responses))
-    with (
+    patches = [
         patch("app.ai.agent.ChatOpenAI", return_value=model),
         patch("app.ai.agent.get_user_vector_store", return_value=None),
         patch("app.ai.agent.index_files"),
-    ):
+    ]
+    if candidate_paths is not None:
+        patches.append(patch("app.ai.agent._select_candidate_paths", return_value=candidate_paths))
+    with ExitStack() as stack:
+        for p in patches:
+            stack.enter_context(p)
         return run_agentic_review(user_id=1, files=files, action=action, instruction=instruction)
 
 
 def test_read_file_tool_returns_content_and_records_path():
     read_paths: list[str] = []
-    _, read_file_tool = _build_tools(vector_store=None, files_by_path={"a.py": "x = 1"}, read_paths=read_paths)
+    _, read_file_tool = _build_tools(
+        vector_store=None, files_by_path={"a.py": "x = 1"}, search_paths=["a.py"], read_paths=read_paths
+    )
 
     assert read_file_tool.invoke({"path": "a.py"}) == "x = 1"
     assert read_paths == ["a.py"]
@@ -40,7 +48,9 @@ def test_read_file_tool_returns_content_and_records_path():
 
 def test_read_file_tool_reports_unknown_path():
     read_paths: list[str] = []
-    _, read_file_tool = _build_tools(vector_store=None, files_by_path={"a.py": "x = 1"}, read_paths=read_paths)
+    _, read_file_tool = _build_tools(
+        vector_store=None, files_by_path={"a.py": "x = 1"}, search_paths=["a.py"], read_paths=read_paths
+    )
 
     result = read_file_tool.invoke({"path": "missing.py"})
 
@@ -48,9 +58,31 @@ def test_read_file_tool_reports_unknown_path():
     assert read_paths == []
 
 
+def test_read_file_tool_reaches_files_outside_the_search_scope():
+    # The safety valve: read_file isn't limited to the pre-selected candidate
+    # files, only search_files is — so a file the selection step skipped is
+    # still directly readable by exact path.
+    read_paths: list[str] = []
+    _, read_file_tool = _build_tools(
+        vector_store=None,
+        files_by_path={"a.py": "x = 1", "b.py": "y = 2"},
+        search_paths=["a.py"],
+        read_paths=read_paths,
+    )
+
+    assert read_file_tool.invoke({"path": "b.py"}) == "y = 2"
+    assert read_paths == ["b.py"]
+
+
 def test_search_files_tool_delegates_to_search_relevant_paths():
+    # search_paths (the pre-selected candidates) is what gets passed to the
+    # search, not every path in files_by_path — proves the two are scoped
+    # independently.
     search_files_tool, _ = _build_tools(
-        vector_store="fake-store", files_by_path={"a.py": "x", "b.py": "y"}, read_paths=[]
+        vector_store="fake-store",
+        files_by_path={"a.py": "x", "b.py": "y", "c.py": "z"},
+        search_paths=["a.py", "b.py"],
+        read_paths=[],
     )
 
     with patch("app.ai.agent.search_relevant_paths", return_value=["a.py"]) as mock_search:
@@ -60,17 +92,45 @@ def test_search_files_tool_delegates_to_search_relevant_paths():
     mock_search.assert_called_once_with("fake-store", "auth", ["a.py", "b.py"], 3)
 
 
-def test_run_agentic_review_executes_read_file_then_returns_final_answer():
-    files = [ProjectFile(path="a.py", content="x = 1\n")]
+def test_run_agentic_review_only_indexes_selected_candidate_files():
+    files = [ProjectFile(path="a.py", content="x = 1\n"), ProjectFile(path="b.py", content="y = 2\n")]
+    responses = [AIMessage(content="No files needed looking at.")]
+    model = FakeToolCallingModel(messages=iter(responses))
+
+    with (
+        patch("app.ai.agent.ChatOpenAI", return_value=model),
+        patch("app.ai.agent.get_user_vector_store", return_value=None),
+        patch("app.ai.agent.index_files") as mock_index,
+        patch("app.ai.agent._select_candidate_paths", return_value=["a.py"]),
+    ):
+        run_agentic_review(user_id=1, files=files, action="review", instruction="check it")
+
+    indexed_files = mock_index.call_args[0][1]
+    assert [f.path for f in indexed_files] == ["a.py"]
+
+
+def test_run_agentic_review_read_file_reaches_a_non_candidate_file():
+    files = [ProjectFile(path="a.py", content="x = 1\n"), ProjectFile(path="b.py", content="y = 2\n")]
     responses = [
-        AIMessage(content="", tool_calls=[{"name": "read_file", "args": {"path": "a.py"}, "id": "call_1"}]),
-        AIMessage(content="x = 1 looks fine."),
+        AIMessage(content="", tool_calls=[{"name": "read_file", "args": {"path": "b.py"}, "id": "call_1"}]),
+        AIMessage(content="b.py looks fine."),
     ]
 
-    reply, read_paths = _run_with_responses(responses, files)
+    reply, read_paths = _run_with_responses(responses, files, candidate_paths=["a.py"])
 
-    assert reply == "x = 1 looks fine."
-    assert read_paths == ["a.py"]
+    assert reply == "b.py looks fine."
+    # a.py was preloaded (it's the candidate); b.py was fetched via read_file.
+    assert read_paths == ["a.py", "b.py"]
+
+
+def test_select_candidate_paths_skips_the_model_call_when_within_top_n():
+    from app.ai.agent import _select_candidate_paths
+
+    with patch("app.ai.agent.ChatOpenAI") as mock_model:
+        result = _select_candidate_paths(["a.py", "b.py"], "review", "check it", top_n=5)
+
+    mock_model.assert_not_called()
+    assert result == ["a.py", "b.py"]
 
 
 def test_run_agentic_review_stops_immediately_when_no_tool_call():
@@ -80,20 +140,101 @@ def test_run_agentic_review_stops_immediately_when_no_tool_call():
     reply, read_paths = _run_with_responses(responses, files)
 
     assert reply == "No files needed looking at."
-    assert read_paths == []
+    # a.py is the only (and therefore candidate) file — its content is
+    # preloaded, so it's "considered" even with zero tool calls.
+    assert read_paths == ["a.py"]
+
+
+def test_run_agentic_review_fix_returns_structured_edits():
+    files = [ProjectFile(path="a.py", content="x = 1\n"), ProjectFile(path="b.py", content="y = 2\n")]
+    responses = [
+        AIMessage(
+            content="",
+            tool_calls=[
+                {
+                    "name": "FixEdits",
+                    "args": {"edits": [{"path": "a.py", "content": "x = 2\n"}]},
+                    "id": "call_1",
+                }
+            ],
+        )
+    ]
+
+    edits, _ = _run_with_responses(responses, files, action="fix", candidate_paths=["a.py", "b.py"])
+
+    assert len(edits) == 1
+    assert edits[0].path == "a.py"
+    assert edits[0].output == "x = 2\n"
+    assert "+x = 2" in edits[0].diff
+
+
+def test_run_agentic_review_fix_skips_unknown_and_unchanged_files():
+    files = [ProjectFile(path="a.py", content="x = 1\n")]
+    responses = [
+        AIMessage(
+            content="",
+            tool_calls=[
+                {
+                    "name": "FixEdits",
+                    "args": {
+                        "edits": [
+                            {"path": "a.py", "content": "x = 1\n"},  # unchanged
+                            {"path": "unknown.py", "content": "z = 1\n"},  # not in request
+                        ]
+                    },
+                    "id": "call_1",
+                }
+            ],
+        )
+    ]
+
+    edits, _ = _run_with_responses(responses, files, action="fix", candidate_paths=["a.py"])
+
+    assert edits == []
+
+
+def test_run_agentic_review_fix_multiple_files_needs_no_read_file_round_trip():
+    # Before the preload fix, the agent needed one read_file round trip per
+    # candidate file before it could finalize, so a multi-file fix burned
+    # recursion budget proportional to file count (and could exceed the
+    # limit). Candidate content is now handed over directly, so finishing in
+    # a single round trip regardless of file count is what proves the fix.
+    files = [ProjectFile(path=f"f{i}.py", content=f"x = {i}\n") for i in range(5)]
+    responses = [
+        AIMessage(
+            content="",
+            tool_calls=[
+                {
+                    "name": "FixEdits",
+                    "args": {"edits": [{"path": "f0.py", "content": "x = 100\n"}]},
+                    "id": "call_1",
+                }
+            ],
+        )
+    ]
+
+    edits, considered = _run_with_responses(
+        responses, files, action="fix", candidate_paths=[f.path for f in files]
+    )
+
+    assert [e.path for e in edits] == ["f0.py"]
+    assert considered == [f.path for f in files]
 
 
 def test_run_agentic_review_raises_when_recursion_limit_exceeded(monkeypatch):
     from app.config import settings
 
     monkeypatch.setattr(settings, "agent_recursion_limit", 2)
-    files = [ProjectFile(path="a.py", content="x = 1\n")]
+    # b.py is outside the candidate set (forced via candidate_paths below), so
+    # the tools are actually bound — only then can endless read_file calls
+    # exercise the recursion limit at all.
+    files = [ProjectFile(path="a.py", content="x = 1\n"), ProjectFile(path="b.py", content="y = 2\n")]
 
     def endless():
         while True:
             yield AIMessage(
-                content="", tool_calls=[{"name": "read_file", "args": {"path": "a.py"}, "id": "call_x"}]
+                content="", tool_calls=[{"name": "read_file", "args": {"path": "b.py"}, "id": "call_x"}]
             )
 
     with pytest.raises(GraphRecursionError):
-        _run_with_responses(list(itertools.islice(endless(), 10)), files)
+        _run_with_responses(list(itertools.islice(endless(), 10)), files, candidate_paths=["a.py"])
