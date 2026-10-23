@@ -3,22 +3,16 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Button, buttonVariants } from "@/components/ui/button";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-  CardFooter,
-} from "@/components/ui/card";
+import { FolderCode, Loader2 } from "lucide-react";
+import { buttonVariants } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { SiteHeader } from "@/components/site-header";
 import { getCurrentUser, type User } from "@/lib/api";
 import { getToken, clearToken } from "@/lib/auth";
 
 export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const token = getToken();
@@ -34,44 +28,59 @@ export default function DashboardPage() {
       });
   }, [router]);
 
-  function handleLogout() {
-    clearToken();
-    router.push("/login");
-  }
-
   if (!user) {
     return (
-      <div className="flex flex-1 items-center justify-center p-6">
-        <p className="text-sm text-muted-foreground">{error ?? "Loading..."}</p>
+      <div className="flex flex-1 items-center justify-center gap-2 p-6 text-sm text-muted-foreground">
+        <Loader2 className="size-4 animate-spin" />
+        Loading...
       </div>
     );
   }
 
   return (
-    <div className="flex flex-1 items-center justify-center p-6">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle>Welcome</CardTitle>
-          <CardDescription>You are logged in.</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-2 text-sm">
-          <p>
-            <span className="text-muted-foreground">Email:</span> {user.email}
-          </p>
-          <p>
-            <span className="text-muted-foreground">Member since:</span>{" "}
-            {new Date(user.created_at).toLocaleString()}
-          </p>
-        </CardContent>
-        <CardFooter className="flex-col items-stretch gap-2">
-          <Link href="/ingest" className={buttonVariants({ className: "w-full" })}>
+    <div className="flex flex-1 flex-col">
+      <SiteHeader email={user.email} />
+      <div className="flex flex-1 items-center justify-center p-6">
+        <div className="flex w-full max-w-md flex-col gap-4">
+          <div className="flex flex-col gap-1">
+            <h1 className="text-2xl font-semibold tracking-tight">Welcome back</h1>
+            <p className="text-sm text-muted-foreground">
+              Ingest a project, then ask the assistant to review or fix it.
+            </p>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Account</CardTitle>
+              <CardDescription>Your session details.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid grid-cols-2 gap-4 text-sm">
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground">Email</span>
+                <span className="truncate font-medium">{user.email}</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground">Member since</span>
+                <span className="font-medium">
+                  {new Date(user.created_at).toLocaleDateString(undefined, {
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                  })}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Link
+            href="/ingest"
+            className={buttonVariants({ className: "w-full gap-2", size: "lg" })}
+          >
+            <FolderCode className="size-4" />
             Ingest project files
           </Link>
-          <Button variant="outline" className="w-full" onClick={handleLogout}>
-            Log out
-          </Button>
-        </CardFooter>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

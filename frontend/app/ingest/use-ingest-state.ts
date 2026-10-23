@@ -4,6 +4,7 @@ import { useEffect, useState, type ChangeEvent, type SubmitEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   ApiError,
+  errorMessage,
   ingestPath,
   ingestPathFile,
   ingestUpload,
@@ -16,6 +17,12 @@ import {
 } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 import { MAX_FILE_BYTES, skippedDirectory, type FileResults, type ReviewAction } from "./utils";
+
+function withoutKey<K, V>(map: Map<K, V>, key: K): Map<K, V> {
+  const next = new Map(map);
+  next.delete(key);
+  return next;
+}
 
 export function useIngestState() {
   const router = useRouter();
@@ -103,7 +110,7 @@ export function useIngestState() {
       setResults(new Map());
       setSummary(await ingestUpload(token, files));
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Something went wrong");
+      setError(errorMessage(err));
     } finally {
       setBusy(false);
       // Reset only now (not before processing) so the browser's native "N files
@@ -129,7 +136,7 @@ export function useIngestState() {
       setSummary(await ingestPath(token, serverPath));
       setIngestedRoot(serverPath);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Something went wrong");
+      setError(errorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -168,7 +175,7 @@ export function useIngestState() {
       });
       setActiveTab((prev) => new Map(prev).set(path, action));
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Something went wrong");
+      setError(errorMessage(err));
     } finally {
       setReviewing(null);
     }
@@ -203,7 +210,7 @@ export function useIngestState() {
       const files: ProjectFile[] = summary.accepted.map((f) => ({ path: f.path, content: content.get(f.path)! }));
       setMultiResult(await reviewMultipleFiles(token, files, action, instruction));
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Something went wrong");
+      setError(errorMessage(err));
     } finally {
       setMultiAction(null);
     }
@@ -219,26 +226,10 @@ export function useIngestState() {
           }
         : prev,
     );
-    setUploadedContent((prev) => {
-      const next = new Map(prev);
-      next.delete(path);
-      return next;
-    });
-    setResults((prev) => {
-      const next = new Map(prev);
-      next.delete(path);
-      return next;
-    });
-    setActiveTab((prev) => {
-      const next = new Map(prev);
-      next.delete(path);
-      return next;
-    });
-    setInstructions((prev) => {
-      const next = new Map(prev);
-      next.delete(path);
-      return next;
-    });
+    setUploadedContent((prev) => withoutKey(prev, path));
+    setResults((prev) => withoutKey(prev, path));
+    setActiveTab((prev) => withoutKey(prev, path));
+    setInstructions((prev) => withoutKey(prev, path));
   }
 
   function setFileTab(path: string, action: ReviewAction) {

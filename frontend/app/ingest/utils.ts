@@ -1,4 +1,6 @@
-import type { ReviewResult } from "@/lib/api";
+import type { ReviewAction, ReviewResult } from "@/lib/api";
+
+export type { ReviewAction };
 
 // Mirrors the server's skip rules so junk isn't read or sent. The server re-checks everything.
 export const SKIP_DIRS = new Set([
@@ -47,5 +49,4 @@ export function skippedDirectory(path: string): string | undefined {
   return path.split("/").slice(0, -1).find((part) => SKIP_DIRS.has(part));
 }
 
-export type ReviewAction = "review" | "fix";
 export type FileResults = Partial<Record<ReviewAction, ReviewResult>>;

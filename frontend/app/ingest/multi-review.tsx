@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import { Loader2 } from "lucide-react";
+import { Eye, Loader2, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { MultiReviewResult } from "@/lib/api";
@@ -37,7 +37,7 @@ export function MultiReview({
   }
 
   return (
-    <div className="flex flex-col gap-2 border-t pt-4">
+    <div className="flex flex-col gap-2 border-t border-border/60 pt-4">
       <h3 className="text-sm font-medium">
         Feature request across all {fileCount} uploaded file{fileCount === 1 ? "" : "s"}
       </h3>
@@ -48,11 +48,11 @@ export function MultiReview({
       />
       <div className="flex gap-2">
         <Button variant="outline" size="sm" disabled={disabled} onClick={() => submit("review")}>
-          {activeAction === "review" ? <Loader2 className="size-3 animate-spin" /> : null}
+          {activeAction === "review" ? <Loader2 className="size-3 animate-spin" /> : <Eye />}
           Review
         </Button>
         <Button variant="outline" size="sm" disabled={disabled} onClick={() => submit("fix")}>
-          {activeAction === "fix" ? <Loader2 className="size-3 animate-spin" /> : null}
+          {activeAction === "fix" ? <Loader2 className="size-3 animate-spin" /> : <Wand2 />}
           Fix
         </Button>
       </div>

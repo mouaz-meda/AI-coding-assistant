@@ -29,8 +29,8 @@ export function FilePicker({
     <label
       htmlFor={id}
       className={cn(
-        "flex h-8 w-full min-w-0 items-center truncate rounded-lg border border-input bg-transparent px-2.5 py-1 text-base transition-colors outline-none focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 md:text-sm",
-        disabled ? "pointer-events-none cursor-not-allowed opacity-50" : "cursor-pointer",
+        "flex h-8 w-full min-w-0 items-center truncate rounded-lg border border-dashed border-input bg-transparent px-2.5 py-1 text-base transition-colors outline-none focus-within:border-ring focus-within:border-solid focus-within:ring-3 focus-within:ring-ring/50 md:text-sm",
+        disabled ? "pointer-events-none cursor-not-allowed opacity-50" : "cursor-pointer hover:border-ring/60 hover:bg-accent/40",
       )}
     >
       <span className={cn("truncate", displayText ? "text-foreground" : "text-muted-foreground")}>

@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { Eye, Loader2, Wand2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { ReviewAction } from "./utils";
@@ -29,14 +29,17 @@ export function AcceptedFileList({
   const globallyBusy = reviewing !== null;
 
   return (
-    <ul className="max-h-64 overflow-y-auto text-sm">
+    <ul className="flex max-h-72 flex-col gap-2 overflow-y-auto rounded-lg border border-border/60 p-2">
       {files.map((file) => {
         const canAct = uploadedContent.has(file.path) || ingestedRoot !== null;
         return (
-          <li key={file.path} className="flex flex-col gap-1 py-1">
+          <li
+            key={file.path}
+            className="flex flex-col gap-1.5 rounded-md border border-border/60 bg-card/60 p-2"
+          >
             <div className="flex justify-between gap-2">
-              <span className="break-all">{file.path}</span>
-              <span className="shrink-0 text-muted-foreground">{file.size.toLocaleString()} B</span>
+              <span className="truncate text-xs font-medium break-all">{file.path}</span>
+              <span className="shrink-0 text-xs text-muted-foreground">{file.size.toLocaleString()} B</span>
             </div>
             {canAct && (
               <Textarea
@@ -48,10 +51,11 @@ export function AcceptedFileList({
                 onChange={(e) => onInstructionChange(file.path, e.target.value)}
               />
             )}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               {canAct ? (
                 <>
                   <ActionButton
+                    icon={Eye}
                     label="Review"
                     loadingLabel="Reviewing..."
                     active={reviewing?.path === file.path && reviewing.action === "review"}
@@ -59,6 +63,7 @@ export function AcceptedFileList({
                     onClick={() => onReview(file.path, "review")}
                   />
                   <ActionButton
+                    icon={Wand2}
                     label="Fix"
                     loadingLabel="Fixing..."
                     active={reviewing?.path === file.path && reviewing.action === "fix"}
@@ -73,12 +78,13 @@ export function AcceptedFileList({
               )}
               <Button
                 variant="ghost"
-                size="xs"
-                className="text-destructive hover:text-destructive"
+                size="icon-xs"
+                className="ml-auto text-muted-foreground hover:text-destructive"
                 disabled={globallyBusy}
                 onClick={() => onRemove(file.path)}
+                aria-label="Remove file"
               >
-                Remove
+                <X />
               </Button>
             </div>
           </li>
@@ -89,12 +95,14 @@ export function AcceptedFileList({
 }
 
 function ActionButton({
+  icon: Icon,
   label,
   loadingLabel,
   active,
   disabled,
   onClick,
 }: {
+  icon: typeof Eye;
   label: string;
   loadingLabel: string;
   active: boolean;
@@ -109,7 +117,10 @@ function ActionButton({
           {loadingLabel}
         </>
       ) : (
-        label
+        <>
+          <Icon />
+          {label}
+        </>
       )}
     </Button>
   );

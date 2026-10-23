@@ -25,7 +25,7 @@ export function ResultsPanel({
         if (!result) return null;
 
         return (
-          <div key={path} className="flex flex-col gap-2 border-t pt-4">
+          <div key={path} className="flex flex-col gap-2 border-t border-border/60 pt-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-sm font-medium break-all">{path}</h3>
               {available.length > 1 ? (
