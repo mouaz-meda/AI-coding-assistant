@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ChangeEvent, type SubmitEvent } from "react";
+import { useEffect, useState, type SubmitEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   ApiError,
@@ -16,6 +16,7 @@ import {
   type SkippedFile,
 } from "@/lib/api";
 import { getToken } from "@/lib/auth";
+import type { PickedFile } from "./dropzone";
 import { MAX_FILE_BYTES, skippedDirectory, type FileResults, type ReviewAction } from "./utils";
 
 function withoutKey<K, V>(map: Map<K, V>, key: K): Map<K, V> {
@@ -45,10 +46,9 @@ export function useIngestState() {
   // Live instruction text per file, separate from results since it's input, not a fetched value.
   const [instructions, setInstructions] = useState<Map<string, string>>(new Map());
   // The browser's own "N files selected" text on a file input is native UI we can't
-  // customize or rely on (it reverts the moment the input resets), so FilePicker
-  // shows this instead. One per input, since each keeps its own last selection.
-  const [filesLabel, setFilesLabel] = useState<string | null>(null);
-  const [folderLabel, setFolderLabel] = useState<string | null>(null);
+  // customize or rely on (it reverts the moment the input resets), so Dropzone
+  // shows this instead.
+  const [selectionLabel, setSelectionLabel] = useState<string | null>(null);
   const [multiAction, setMultiAction] = useState<ReviewAction | null>(null);
   const [multiResult, setMultiResult] = useState<MultiReviewResult | null>(null);
 
@@ -62,23 +62,12 @@ export function useIngestState() {
     return token;
   }
 
-  async function handleFilesSelected(e: ChangeEvent<HTMLInputElement>) {
-    const inputEl = e.target;
-    const selected = Array.from(inputEl.files ?? []);
+  async function handleFilesSelected(selected: PickedFile[]) {
     const token = requireToken();
     if (!token) return;
     if (selected.length === 0) return;
 
-    const isFolder = selected.some((f) => f.webkitRelativePath);
-    const label =
-      selected.length === 1 && !isFolder
-        ? selected[0].name
-        : `${selected.length} file${selected.length === 1 ? "" : "s"}`;
-    if (isFolder) {
-      setFolderLabel(label);
-    } else {
-      setFilesLabel(label);
-    }
+    setSelectionLabel(selected.length === 1 ? selected[0].path : `${selected.length} files`);
 
     setError(null);
     setSummary(null);
@@ -89,8 +78,7 @@ export function useIngestState() {
       const files: ProjectFile[] = [];
       const skipped: SkippedFile[] = [];
 
-      for (const file of selected) {
-        const path = file.webkitRelativePath || file.name;
+      for (const { path, file } of selected) {
         const skippedDir = skippedDirectory(path);
         if (skippedDir) {
           skipped.push({ path, reason: `inside skipped directory '${skippedDir}'` });
@@ -113,10 +101,6 @@ export function useIngestState() {
       setError(errorMessage(err));
     } finally {
       setBusy(false);
-      // Reset only now (not before processing) so the browser's native "N files
-      // selected" display stays visible while ingesting — still resets so the
-      // same file/folder can be re-selected later.
-      inputEl.value = "";
     }
   }
 
@@ -249,8 +233,7 @@ export function useIngestState() {
     results,
     activeTab,
     instructions,
-    filesLabel,
-    folderLabel,
+    selectionLabel,
     multiAction,
     multiBusy: multiAction !== null,
     multiResult,

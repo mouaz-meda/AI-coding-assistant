@@ -1,19 +1,16 @@
 "use client";
 
-import { FolderInput, FolderUp, Loader2, Upload } from "lucide-react";
+import { FolderInput, Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { SiteHeader } from "@/components/site-header";
 import { AcceptedFileList } from "./accepted-file-list";
-import { FilePicker } from "./file-picker";
+import { Dropzone } from "./dropzone";
 import { MultiReview } from "./multi-review";
 import { ResultsPanel } from "./results-panel";
 import { useIngestState } from "./use-ingest-state";
-
-// React's types don't include this attribute; it turns the file input into a folder picker.
-const folderPickerProps = { webkitdirectory: "" } as Record<string, string>;
 
 export default function IngestPage() {
   const {
@@ -29,8 +26,7 @@ export default function IngestPage() {
     results,
     activeTab,
     instructions,
-    filesLabel,
-    folderLabel,
+    selectionLabel,
     multiAction,
     multiBusy,
     multiResult,
@@ -67,35 +63,12 @@ export default function IngestPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-6">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="files" className="flex items-center gap-1.5">
-                  <Upload className="size-3.5 text-muted-foreground" />
-                  Upload files
-                </Label>
-                <FilePicker
-                  id="files"
-                  placeholder="No file chosen"
-                  displayText={filesLabel}
-                  multiple
-                  disabled={anyBusy}
-                  onChange={handleFilesSelected}
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="folder" className="flex items-center gap-1.5">
-                  <FolderUp className="size-3.5 text-muted-foreground" />
-                  Upload a folder
-                </Label>
-                <FilePicker
-                  id="folder"
-                  placeholder="No folder chosen"
-                  displayText={folderLabel}
-                  disabled={anyBusy}
-                  onChange={handleFilesSelected}
-                  inputProps={folderPickerProps}
-                />
-              </div>
+            <div className="flex flex-col gap-2">
+              <Label className="flex items-center gap-1.5">
+                <Upload className="size-3.5 text-muted-foreground" />
+                Upload files or a folder
+              </Label>
+              <Dropzone displayText={selectionLabel} disabled={anyBusy} onFilesPicked={handleFilesSelected} />
             </div>
 
             <form onSubmit={handlePathSubmit} className="flex flex-col gap-2">
