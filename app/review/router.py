@@ -6,7 +6,13 @@ from app.auth.dependencies import get_current_user
 from app.colors import RESET, REVIEW
 from app.models.user import User
 from app.review.diff import make_diff
-from app.schemas.review import MultiReviewRequest, MultiReviewResponse, ReviewRequest, ReviewResponse
+from app.schemas.review import (
+    MultiReviewRequest,
+    MultiReviewResponse,
+    ReviewFinding,
+    ReviewRequest,
+    ReviewResponse,
+)
 
 router = APIRouter(tags=["review"])
 
@@ -37,9 +43,14 @@ def review_multi(request: MultiReviewRequest, current_user: User = Depends(get_c
     )
     result, considered = run_agentic_review(current_user.id, request.files, request.action, request.instruction)
     if request.action == "review":
-        print(f"{REVIEW}[review] POST /review/multi → considered={considered}{RESET}")
+        findings = [ReviewFinding(path=f.path, notes=f.notes) for f in result.findings]
+        print(f"{REVIEW}[review] POST /review/multi → findings={[f.path for f in findings]}, considered={considered}{RESET}")
         return MultiReviewResponse(
-            action="review", instruction=request.instruction, output=result, considered_files=considered
+            action="review",
+            instruction=request.instruction,
+            general=result.general or None,
+            findings=findings,
+            considered_files=considered,
         )
 
     print(f"{REVIEW}[review] POST /review/multi → edits={[e.path for e in result]}, considered={considered}{RESET}")

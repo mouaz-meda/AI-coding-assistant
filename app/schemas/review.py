@@ -32,10 +32,16 @@ class FileEdit(BaseModel):
     diff: str
 
 
+class ReviewFinding(BaseModel):
+    path: str
+    notes: str
+
+
 class MultiReviewResponse(BaseModel):
     action: str
     instruction: str
-    output: str | None = None
+    general: str | None = None
+    findings: list[ReviewFinding] = []
     edits: list[FileEdit] = []
     # Which files' content actually informed the agent's answer: the
     # pre-selected candidates (preloaded, no tool call needed) plus any extra

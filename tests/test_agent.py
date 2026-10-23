@@ -94,7 +94,14 @@ def test_search_files_tool_delegates_to_search_relevant_paths():
 
 def test_run_agentic_review_only_indexes_selected_candidate_files():
     files = [ProjectFile(path="a.py", content="x = 1\n"), ProjectFile(path="b.py", content="y = 2\n")]
-    responses = [AIMessage(content="No files needed looking at.")]
+    responses = [
+        AIMessage(
+            content="",
+            tool_calls=[
+                {"name": "ReviewFindings", "args": {"general": "No files needed looking at."}, "id": "call_1"}
+            ],
+        )
+    ]
     model = FakeToolCallingModel(messages=iter(responses))
 
     with (
@@ -113,12 +120,23 @@ def test_run_agentic_review_read_file_reaches_a_non_candidate_file():
     files = [ProjectFile(path="a.py", content="x = 1\n"), ProjectFile(path="b.py", content="y = 2\n")]
     responses = [
         AIMessage(content="", tool_calls=[{"name": "read_file", "args": {"path": "b.py"}, "id": "call_1"}]),
-        AIMessage(content="b.py looks fine."),
+        AIMessage(
+            content="",
+            tool_calls=[
+                {
+                    "name": "ReviewFindings",
+                    "args": {"findings": [{"path": "b.py", "notes": "b.py looks fine."}]},
+                    "id": "call_2",
+                }
+            ],
+        ),
     ]
 
     reply, read_paths = _run_with_responses(responses, files, candidate_paths=["a.py"])
 
-    assert reply == "b.py looks fine."
+    assert len(reply.findings) == 1
+    assert reply.findings[0].path == "b.py"
+    assert reply.findings[0].notes == "b.py looks fine."
     # a.py was preloaded (it's the candidate); b.py was fetched via read_file.
     assert read_paths == ["a.py", "b.py"]
 
@@ -133,15 +151,23 @@ def test_select_candidate_paths_skips_the_model_call_when_within_top_n():
     assert result == ["a.py", "b.py"]
 
 
-def test_run_agentic_review_stops_immediately_when_no_tool_call():
+def test_run_agentic_review_stops_after_one_structured_response_call():
     files = [ProjectFile(path="a.py", content="x = 1\n")]
-    responses = [AIMessage(content="No files needed looking at.")]
+    responses = [
+        AIMessage(
+            content="",
+            tool_calls=[
+                {"name": "ReviewFindings", "args": {"general": "No files needed looking at."}, "id": "call_1"}
+            ],
+        )
+    ]
 
     reply, read_paths = _run_with_responses(responses, files)
 
-    assert reply == "No files needed looking at."
+    assert reply.general == "No files needed looking at."
+    assert reply.findings == []
     # a.py is the only (and therefore candidate) file — its content is
-    # preloaded, so it's "considered" even with zero tool calls.
+    # preloaded, so it's "considered" even with zero read_file/search_files calls.
     assert read_paths == ["a.py"]
 
 

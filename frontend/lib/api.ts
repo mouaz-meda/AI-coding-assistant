@@ -108,10 +108,16 @@ export type FileEdit = {
   diff: string;
 };
 
+export type ReviewFinding = {
+  path: string;
+  notes: string;
+};
+
 export type MultiReviewResult = {
   action: ReviewAction;
   instruction: string;
-  output: string | null;
+  general: string | null;
+  findings: ReviewFinding[];
   edits: FileEdit[];
   considered_files: string[];
 };

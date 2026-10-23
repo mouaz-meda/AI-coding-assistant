@@ -22,14 +22,17 @@ AGENT_SYSTEM_PROMPT = (
     "other files, then read_file to see its full content before referencing or "
     "changing it. Never guess at a file's content without reading it first, "
     "and never call the same tool with the same arguments more than once.\n\n"
-    "When you are ready to give your final answer, stop calling tools:\n"
-    '- For a "review": reply with plain text describing your findings, '
-    "referencing file paths where relevant. Do not rewrite any file.\n"
-    '- For a "fix": submit your final answer with exactly ONE call to the '
-    "structured response tool, whose edits list contains every changed file "
-    "as one item each — never call it more than once, and never call it "
-    "separately per file. Include only files whose content actually changed, "
-    "each with its full new content."
+    "When you are ready to give your final answer, stop calling tools, and "
+    "submit your final answer with exactly ONE call to the structured response "
+    "tool — never call it more than once, and never call it separately per "
+    "file:\n"
+    '- For a "review": the findings list contains one entry per file that has '
+    "feedback (skip files with nothing to note), each with that file's notes. "
+    "Use general for feedback that isn't about one specific file. Do not "
+    "rewrite any file.\n"
+    '- For a "fix": the edits list contains every changed file as one item '
+    "each, each with its full new content. Include only files whose content "
+    "actually changed."
 )
 
 
@@ -43,6 +46,19 @@ class FixEdits(BaseModel):
     whose content actually changed. Do not include unchanged files."""
 
     edits: list[FileFix]
+
+
+class FileReview(BaseModel):
+    path: str
+    notes: str
+
+
+class ReviewFindings(BaseModel):
+    """Final answer for a "review" action — findings grouped per file, so the
+    UI can show each file's feedback separately instead of one wall of text."""
+
+    general: str = ""
+    findings: list[FileReview] = []
 
 
 def _build_tools(
@@ -123,7 +139,7 @@ def run_agentic_review(
     files: list[ProjectFile],
     action: Literal["review", "fix"],
     instruction: str,
-) -> tuple[str | list[FileEdit], list[str]]:
+) -> tuple[ReviewFindings | list[FileEdit], list[str]]:
     """Feeds the model the pre-selected candidates' content directly (no tool
     round trip needed to fetch what we already loaded into memory to index
     them), while still letting it drive retrieval itself via tool calls for
@@ -152,7 +168,7 @@ def run_agentic_review(
         model=_build_chat_model(),
         tools=tools,
         system_prompt=AGENT_SYSTEM_PROMPT,
-        response_format=FixEdits if action == "fix" else None,
+        response_format=FixEdits if action == "fix" else ReviewFindings,
     )
 
     candidate_block = "\n\n".join(f"=== {f.path} ===\n{f.content}" for f in candidate_files)
@@ -183,12 +199,12 @@ def run_agentic_review(
         print(f"{AGENT}[agent] final edits (considered={read_paths}): {[e.path for e in edits]}{RESET}")
         return edits, read_paths
 
-    reply = result["messages"][-1].content
+    findings: ReviewFindings = result["structured_response"]
     print(
-        f"{AGENT}[agent] final answer ({len(reply)} chars, considered={read_paths}):\n"
-        f"{'-' * 60}\n{reply}\n{'-' * 60}{RESET}"
+        f"{AGENT}[agent] final findings (considered={read_paths}): "
+        f"{[f.path for f in findings.findings]}, general={bool(findings.general)}{RESET}"
     )
-    return reply, read_paths
+    return findings, read_paths
 
 
 def _build_edits(fixes: list[FileFix], files_by_path: dict[str, str]) -> list[FileEdit]:
