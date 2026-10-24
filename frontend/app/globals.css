@@ -130,7 +130,7 @@
     background-attachment: fixed;
   }
   html {
-    @apply font-sans;
+    @apply font-mono;
   }
   * {
     scrollbar-width: thin;

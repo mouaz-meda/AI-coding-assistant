@@ -4,9 +4,11 @@ import type { ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { oneDark, oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { useTheme } from "@/lib/theme";
 
 function CodeBlock({ className, children }: { className?: string; children?: ReactNode }) {
+  const theme = useTheme();
   const match = /language-(\w+)/.exec(className ?? "");
   const text = String(children).replace(/\n$/, "");
 
@@ -14,7 +16,7 @@ function CodeBlock({ className, children }: { className?: string; children?: Rea
     return (
       <SyntaxHighlighter
         language={match[1]}
-        style={oneDark}
+        style={theme === "dark" ? oneDark : oneLight}
         customStyle={{ margin: 0, borderRadius: "0.5rem", fontSize: "0.75rem" }}
       >
         {text}

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LogOut, Sparkles } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { clearToken } from "@/lib/auth";
 import { cn } from "cn";
 
@@ -45,6 +46,7 @@ export function SiteHeader({ email }: { email?: string }) {
           {email && (
             <span className="ml-1 hidden max-w-40 truncate text-xs text-muted-foreground md:inline">{email}</span>
           )}
+          <ThemeToggle />
           <button
             onClick={handleLogout}
             className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "ml-1 text-muted-foreground")}

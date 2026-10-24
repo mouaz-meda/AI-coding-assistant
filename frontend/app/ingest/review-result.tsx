@@ -2,6 +2,7 @@
 
 import ReactDiffViewer from "react-diff-viewer-continued";
 import type { ReviewResult } from "@/lib/api";
+import { useTheme } from "@/lib/theme";
 import { languageFromPath } from "./utils";
 import { ReviewMarkdown } from "./markdown-content";
 
@@ -12,6 +13,7 @@ export function ReviewResultView({
   result: ReviewResult;
   original: string | undefined;
 }) {
+  const theme = useTheme();
   if (result.diff === null) return <ReviewMarkdown text={result.output} />;
   if (result.diff === "") return <p className="text-sm text-muted-foreground">No changes needed.</p>;
   if (original === undefined) {
@@ -25,7 +27,7 @@ export function ReviewResultView({
         oldValue={original}
         newValue={result.output}
         splitView={false}
-        useDarkTheme
+        useDarkTheme={theme === "dark"}
         highlightLanguage={languageFromPath(result.path)}
       />
     </div>
