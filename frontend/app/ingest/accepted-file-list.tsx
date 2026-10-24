@@ -38,13 +38,13 @@ export function AcceptedFileList({
             className="flex flex-col gap-1.5 rounded-md border border-border/60 bg-card/60 p-2"
           >
             <div className="flex justify-between gap-2">
-              <span className="truncate text-xs font-medium break-all">{file.path}</span>
+              <span className="truncate text-sm font-medium break-all">{file.path}</span>
               <span className="shrink-0 text-xs text-muted-foreground">{file.size.toLocaleString()} B</span>
             </div>
             {canAct && (
               <Textarea
                 placeholder="Optional instruction, e.g. 'add input validation' (leave empty for a generic review/fix)"
-                className="min-h-8 text-xs"
+                className="min-h-8 text-xs md:text-xs"
                 rows={1}
                 disabled={globallyBusy}
                 value={instructions.get(file.path) ?? ""}

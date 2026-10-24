@@ -80,6 +80,7 @@ export default function IngestPage() {
               <div className="flex gap-2">
                 <Input
                   id="server-path"
+                  className="text-xs md:text-xs"
                   placeholder="path relative to the server's INGEST_ROOT"
                   disabled={anyBusy}
                   value={serverPath}

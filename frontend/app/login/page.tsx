@@ -56,7 +56,7 @@ export default function LoginPage() {
             <CardDescription>Welcome back.</CardDescription>
           </CardHeader>
           <form onSubmit={handleSubmit}>
-            <CardContent className="flex flex-col gap-4">
+            <CardContent className="flex flex-col gap-4 pb-2">
               <div className="flex flex-col gap-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
@@ -79,7 +79,7 @@ export default function LoginPage() {
               </div>
               {error && <p className="text-sm text-destructive">{error}</p>}
             </CardContent>
-            <CardFooter className="flex flex-col gap-3 pt-4">
+            <CardFooter className="flex flex-col gap-3 mt-2">
               <Button type="submit" className="w-full" disabled={submitting}>
                 {submitting ? "Logging in..." : "Log in"}
               </Button>

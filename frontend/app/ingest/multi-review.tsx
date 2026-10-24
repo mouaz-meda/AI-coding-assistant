@@ -44,6 +44,7 @@ export function MultiReview({
       </h3>
       <Textarea
         ref={instructionRef}
+        className="text-xs md:text-xs"
         placeholder="e.g. 'add a deleted_at column and update every place that queries users'"
         disabled={disabled}
       />
