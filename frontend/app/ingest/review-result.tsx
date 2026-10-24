@@ -25,6 +25,7 @@ export function ReviewResultView({
         oldValue={original}
         newValue={result.output}
         splitView={false}
+        useDarkTheme
         highlightLanguage={languageFromPath(result.path)}
       />
     </div>
