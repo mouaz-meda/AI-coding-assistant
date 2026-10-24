@@ -11,3 +11,4 @@ langchain-openai
 langchain-chroma
 langchain-text-splitters
 pytest
+httpx

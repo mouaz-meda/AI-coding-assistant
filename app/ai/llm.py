@@ -1,9 +1,39 @@
+import logging
 from typing import Literal
 
+from langchain_core.callbacks import BaseCallbackHandler
 from langchain_openai import ChatOpenAI
 
-from app.colors import LLM, RESET
 from app.config import settings
+
+logger = logging.getLogger(__name__)
+
+
+class LoggingCallback(BaseCallbackHandler):
+    """Gives any ChatOpenAI instance the same call/response visibility
+    get_chat_response prints below — for model calls made elsewhere (the
+    agent's tool-calling loop, path-selection) that don't go through that
+    function. Attach via callbacks=[LoggingCallback()] when building a model.
+    """
+
+    def on_chat_model_start(self, serialized, messages, **kwargs):
+        chars = sum(len(m.content) for batch in messages for m in batch if isinstance(m.content, str))
+        logger.info("chat completion call → model=%s, message_chars=%d", settings.openai_model, chars)
+
+    def on_llm_end(self, response, **kwargs):
+        generation = response.generations[0][0]
+        text = generation.text
+        if text:
+            logger.info("chat completion response (%d chars):\n%s\n%s\n%s", len(text), "-" * 60, text, "-" * 60)
+            return
+        tool_calls = getattr(generation.message, "tool_calls", None)
+        if tool_calls:
+            logger.info(
+                "chat completion response → tool call(s): %s",
+                [(call["name"], call["args"]) for call in tool_calls],
+            )
+        else:
+            logger.info("chat completion response (empty)")
 
 
 def _review_prompt(content: str, instruction: str | None) -> str:
@@ -24,14 +54,14 @@ def _fix_prompt(content: str, instruction: str | None) -> str:
 
 
 def get_chat_response(message: str) -> str:
-    print(f"{LLM}[llm] chat completion call → model={settings.openai_model}, message_chars={len(message)}{RESET}")
+    logger.info("chat completion call → model=%s, message_chars=%d", settings.openai_model, len(message))
     model = ChatOpenAI(
         model=settings.openai_model,
         api_key=settings.openai_api_key,
         base_url=settings.openai_base_url or None,
     )
     reply = model.invoke(message).content
-    print(f"{LLM}[llm] chat completion response ({len(reply)} chars):\n{'-' * 60}\n{reply}\n{'-' * 60}{RESET}")
+    logger.info("chat completion response (%d chars):\n%s\n%s\n%s", len(reply), "-" * 60, reply, "-" * 60)
     return reply
 
 

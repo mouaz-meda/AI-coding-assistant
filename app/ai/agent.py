@@ -1,3 +1,4 @@
+import logging
 from typing import Literal
 
 from langchain.agents import create_agent
@@ -6,12 +7,14 @@ from langchain_chroma import Chroma
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 
+from app.ai.llm import LoggingCallback
 from app.ai.vector_store import get_user_vector_store, index_files, search_relevant_paths
-from app.colors import AGENT, RESET
 from app.config import settings
 from app.review.diff import make_diff
 from app.schemas.ingestion import ProjectFile
 from app.schemas.review import FileEdit
+
+logger = logging.getLogger(__name__)
 
 AGENT_SYSTEM_PROMPT = (
     "You are an autonomous code-editing assistant working across a multi-file "
@@ -75,7 +78,7 @@ def _build_tools(
         files to look at before reading them in full.
         """
         result = search_relevant_paths(vector_store, query, search_paths, top_n)
-        print(f"{AGENT}[agent] tool call: search_files(query={query!r}, top_n={top_n}) → {result}{RESET}")
+        logger.info("tool call: search_files(query=%r, top_n=%d) → %s", query, top_n, result)
         return result
 
     @tool
@@ -84,9 +87,9 @@ def _build_tools(
         the pre-selected files — any path from the available-files list works."""
         content = files_by_path.get(path)
         if content is None:
-            print(f"{AGENT}[agent] tool call: read_file(path={path!r}) → not found{RESET}")
+            logger.info("tool call: read_file(path=%r) → not found", path)
             return f"No file at path '{path}'. Available paths: {', '.join(files_by_path)}"
-        print(f"{AGENT}[agent] tool call: read_file(path={path!r}) → {len(content)} chars{RESET}")
+        logger.info("tool call: read_file(path=%r) → %d chars", path, len(content))
         if path not in read_paths:  # already preloaded or already read — don't double-count
             read_paths.append(path)
         return content
@@ -99,6 +102,7 @@ def _build_chat_model() -> ChatOpenAI:
         model=settings.openai_model,
         api_key=settings.openai_api_key,
         base_url=settings.openai_base_url or None,
+        callbacks=[LoggingCallback()],
     )
 
 
@@ -117,10 +121,10 @@ def _select_candidate_paths(paths: list[str], action: str, instruction: str, top
     off from a file it turns out to need.
     """
     if len(paths) <= top_n:
-        print(f"{AGENT}[agent] path-selection call skipped — only {len(paths)} file(s), top_n={top_n}{RESET}")
+        logger.info("path-selection call skipped — only %d file(s), top_n=%d", len(paths), top_n)
         return paths
 
-    print(f"{AGENT}[agent] path-selection call → model={settings.openai_model}, {len(paths)} candidate paths{RESET}")
+    logger.info("path-selection call → model=%s, %d candidate paths", settings.openai_model, len(paths))
     selector = _build_chat_model().with_structured_output(_PathSelection)
     prompt = (
         f"Action: {action}\nInstruction: {instruction}\n\n"
@@ -130,7 +134,7 @@ def _select_candidate_paths(paths: list[str], action: str, instruction: str, top
     )
     result = selector.invoke(prompt)
     selected = [p for p in result.paths if p in paths][:top_n]
-    print(f"{AGENT}[agent] path-selection result → {selected or paths}{RESET}")
+    logger.info("path-selection result → %s", selected or paths)
     return selected or paths
 
 
@@ -151,7 +155,7 @@ def run_agentic_review(
     other_paths = [p for p in files_by_path if p not in candidate_paths]
 
     vector_store = get_user_vector_store(user_id)
-    print(f"{AGENT}[agent] indexing {len(candidate_files)} candidate file(s) for user {user_id}{RESET}")
+    logger.info("indexing %d candidate file(s) for user %d", len(candidate_files), user_id)
     index_files(vector_store, candidate_files)
 
     # Seeded with the candidates: their content is handed to the model below,
@@ -172,9 +176,12 @@ def run_agentic_review(
     )
 
     candidate_block = "\n\n".join(f"=== {f.path} ===\n{f.content}" for f in candidate_files)
-    print(
-        f"{AGENT}[agent] invoking agent → action={action}, files={len(files)}, "
-        f"preloaded={len(candidate_files)}, recursion_limit={settings.agent_recursion_limit}{RESET}"
+    logger.info(
+        "invoking agent → action=%s, files=%d, preloaded=%d, recursion_limit=%d",
+        action,
+        len(files),
+        len(candidate_files),
+        settings.agent_recursion_limit,
     )
     result = agent.invoke(
         {
@@ -196,13 +203,15 @@ def run_agentic_review(
 
     if action == "fix":
         edits = _build_edits(result["structured_response"].edits, files_by_path)
-        print(f"{AGENT}[agent] final edits (considered={read_paths}): {[e.path for e in edits]}{RESET}")
+        logger.info("final edits (considered=%s): %s", read_paths, [e.path for e in edits])
         return edits, read_paths
 
     findings: ReviewFindings = result["structured_response"]
-    print(
-        f"{AGENT}[agent] final findings (considered={read_paths}): "
-        f"{[f.path for f in findings.findings]}, general={bool(findings.general)}{RESET}"
+    logger.info(
+        "final findings (considered=%s): %s, general=%s",
+        read_paths,
+        [f.path for f in findings.findings],
+        bool(findings.general),
     )
     return findings, read_paths
 

@@ -1,7 +1,8 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.auth.dependencies import get_current_user
-from app.colors import INGEST, RESET
 from app.config import settings
 from app.ingestion.loader import (
     FileRejectedError,
@@ -24,6 +25,7 @@ from app.schemas.ingestion import (
 )
 
 router = APIRouter(prefix="/ingest", tags=["ingest"])
+logger = logging.getLogger(__name__)
 
 
 def to_summary(result: IngestResult) -> IngestSummary:
@@ -38,19 +40,19 @@ def to_summary(result: IngestResult) -> IngestSummary:
 
 @router.post("/upload", response_model=IngestSummary)
 def ingest_upload(request: UploadRequest, current_user: User = Depends(get_current_user)):
-    print(f"{INGEST}[ingest] POST /ingest/upload → user={current_user.id}, files={len(request.files)}{RESET}")
+    logger.info("POST /ingest/upload → user=%d, files=%d", current_user.id, len(request.files))
     try:
         result = filter_files(request.files)
     except TooManyFilesError as error:
         raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail=str(error))
     summary = to_summary(result)
-    print(f"{INGEST}[ingest] POST /ingest/upload → accepted={summary.total_accepted}, skipped={summary.total_skipped}{RESET}")
+    logger.info("POST /ingest/upload → accepted=%d, skipped=%d", summary.total_accepted, summary.total_skipped)
     return summary
 
 
 @router.post("/path", response_model=IngestSummary)
 def ingest_path(request: PathRequest, current_user: User = Depends(get_current_user)):
-    print(f"{INGEST}[ingest] POST /ingest/path → user={current_user.id}, path={request.path!r}{RESET}")
+    logger.info("POST /ingest/path → user=%d, path=%r", current_user.id, request.path)
     if not settings.ingest_root:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -70,15 +72,14 @@ def ingest_path(request: PathRequest, current_user: User = Depends(get_current_u
     except TooManyFilesError as error:
         raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail=str(error))
     summary = to_summary(result)
-    print(f"{INGEST}[ingest] POST /ingest/path → accepted={summary.total_accepted}, skipped={summary.total_skipped}{RESET}")
+    logger.info("POST /ingest/path → accepted=%d, skipped=%d", summary.total_accepted, summary.total_skipped)
     return summary
 
 
 @router.post("/path/file", response_model=ProjectFile)
 def ingest_path_file(request: PathFileRequest, current_user: User = Depends(get_current_user)):
-    print(
-        f"{INGEST}[ingest] POST /ingest/path/file → user={current_user.id}, "
-        f"path={request.path!r}, file={request.file!r}{RESET}"
+    logger.info(
+        "POST /ingest/path/file → user=%d, path=%r, file=%r", current_user.id, request.path, request.file
     )
     if not settings.ingest_root:
         raise HTTPException(
@@ -89,7 +90,7 @@ def ingest_path_file(request: PathFileRequest, current_user: User = Depends(get_
     try:
         directory = resolve_within_root(settings.ingest_root, request.path)
         file = read_file(directory, request.file)
-        print(f"{INGEST}[ingest] POST /ingest/path/file → {len(file.content)} chars{RESET}")
+        logger.info("POST /ingest/path/file → %d chars", len(file.content))
         return file
     except PathNotAllowedError as error:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(error))

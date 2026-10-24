@@ -1,20 +1,21 @@
-import logging
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.ai.router import router as chat_router
 from app.auth.router import router as auth_router
+from app.colors import configure_logging
 from app.config import settings
 from app.database import Base, engine
 from app.ingestion.router import router as ingest_router
 from app.models import user  # noqa: F401 (registers the model with Base)
 from app.review.router import router as review_router
 
-# Minimal stdlib logging so app.* loggers are actually visible in the console.
-# Proper logging setup (formatting, levels per environment, etc.) is Phase 14
-# — this just makes INFO-level logs show up.
-logging.basicConfig(level=logging.INFO)
+# Phase 14: leveled, timestamped logs instead of bare print()s — lets
+# production turn down verbosity (INFO -> WARNING) without touching call
+# sites. Still colored per module (by logger name) for terminal use, same as
+# the old hand-rolled print()s, but that coloring now lives in one Formatter
+# instead of being pasted into every call site.
+configure_logging()
 
 Base.metadata.create_all(bind=engine)
 
