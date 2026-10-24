@@ -1,7 +1,8 @@
 "use client";
 
-import { FolderInput, Loader2, Upload } from "lucide-react";
+import { ChevronRight, FolderInput, Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -123,35 +124,38 @@ export default function IngestPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-6">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="flex flex-col gap-2">
-                  <h3 className="text-sm font-medium">Accepted</h3>
-                  <AcceptedFileList
-                    files={summary.accepted}
-                    uploadedContent={uploadedContent}
-                    ingestedRoot={ingestedRoot}
-                    reviewing={reviewing}
-                    instructions={instructions}
-                    onReview={handleReview}
-                    onRemove={removeFile}
-                    onInstructionChange={setInstruction}
-                  />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <h3 className="text-sm font-medium">Skipped</h3>
-                  <ul className="max-h-64 overflow-y-auto rounded-lg border border-border/60 divide-y divide-border/60 text-sm">
-                    {allSkipped.length === 0 && (
-                      <li className="px-2 py-3 text-center text-xs text-muted-foreground">Nothing skipped</li>
-                    )}
-                    {allSkipped.map((file) => (
-                      <li key={file.path} className="px-2 py-1.5">
-                        <span className="break-all">{file.path}</span>
-                        <span className="block text-xs text-muted-foreground">{file.reason}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+              <div className="flex flex-col gap-2">
+                <h3 className="text-sm font-medium">Accepted</h3>
+                <AcceptedFileList
+                  files={summary.accepted}
+                  uploadedContent={uploadedContent}
+                  ingestedRoot={ingestedRoot}
+                  reviewing={reviewing}
+                  instructions={instructions}
+                  onReview={handleReview}
+                  onRemove={removeFile}
+                  onInstructionChange={setInstruction}
+                />
               </div>
+
+              {allSkipped.length > 0 && (
+                <Collapsible className="rounded-lg border border-border/60 overflow-hidden">
+                  <CollapsibleTrigger className="group flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-accent/40">
+                    <ChevronRight className="size-3.5 shrink-0 text-muted-foreground transition-transform group-data-[panel-open]:rotate-90" />
+                    <span className="text-sm font-medium">Skipped ({allSkipped.length})</span>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="overflow-hidden border-t border-border/60">
+                    <ul className="max-h-64 overflow-y-auto divide-y divide-border/60 text-sm">
+                      {allSkipped.map((file) => (
+                        <li key={file.path} className="px-3 py-1.5">
+                          <span className="break-all">{file.path}</span>
+                          <span className="block text-xs text-muted-foreground">{file.reason}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </CollapsibleContent>
+                </Collapsible>
+              )}
 
               <MultiReview
                 fileCount={summary.accepted.length}
