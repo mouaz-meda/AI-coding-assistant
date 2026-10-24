@@ -22,14 +22,17 @@ export function FileCard({
 }) {
   return (
     <Collapsible defaultOpen={defaultOpen} className="rounded-lg border border-border/60 overflow-hidden">
-      <CollapsibleTrigger className="group flex w-full items-center justify-between gap-2 bg-card px-3 py-2 text-left hover:bg-accent/40">
-        <span className="flex min-w-0 items-center gap-2">
+      <div className="flex items-center justify-between gap-2 bg-card px-3 py-2 hover:bg-accent/40">
+        {/* Only the chevron/icon/path toggle the collapsible — headerExtra (e.g.
+            Review/Fix tabs) renders real buttons of its own, and a <button>
+            can't nest inside another <button> without breaking hydration. */}
+        <CollapsibleTrigger className="group flex min-w-0 flex-1 items-center gap-2 text-left">
           <ChevronRight className="size-3.5 shrink-0 text-muted-foreground transition-transform group-data-[panel-open]:rotate-90" />
           <Icon className="size-3.5 shrink-0 text-muted-foreground" />
           <span className="truncate text-sm font-medium break-all">{path}</span>
-        </span>
+        </CollapsibleTrigger>
         {headerExtra}
-      </CollapsibleTrigger>
+      </div>
       <CollapsibleContent className="flex flex-col gap-2 overflow-hidden border-t border-border/60 p-3">
         {children}
       </CollapsibleContent>

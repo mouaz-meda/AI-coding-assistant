@@ -41,11 +41,7 @@ export function ResultsPanel({
             defaultOpen={entries.length === 1}
             headerExtra={
               available.length > 1 && (
-                <Tabs
-                  value={active}
-                  onValueChange={(value) => onTabChange(path, value as ReviewAction)}
-                  onClick={(e) => e.stopPropagation()}
-                >
+                <Tabs value={active} onValueChange={(value) => onTabChange(path, value as ReviewAction)}>
                   <TabsList>
                     <TabsTrigger value="review">Review</TabsTrigger>
                     <TabsTrigger value="fix">Fix</TabsTrigger>
