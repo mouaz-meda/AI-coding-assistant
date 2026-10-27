@@ -19,6 +19,7 @@ import { register, errorMessage } from "@/lib/api";
 
 export default function RegisterPage() {
   const router = useRouter();
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +30,7 @@ export default function RegisterPage() {
     setError(null);
     setSubmitting(true);
     try {
-      await register(email, password);
+      await register(name, email, password);
       router.push("/login");
     } catch (err) {
       setError(errorMessage(err));
@@ -55,6 +56,16 @@ export default function RegisterPage() {
           </CardHeader>
           <form onSubmit={handleSubmit}>
             <CardContent className="flex flex-col gap-4 pb-2">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="name">Name</Label>
+                <Input
+                  id="name"
+                  type="text"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="email">Email</Label>
                 <Input

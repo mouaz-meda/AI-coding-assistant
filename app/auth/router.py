@@ -19,7 +19,7 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)):
             detail="Email already registered",
         )
 
-    user = User(email=user_in.email, hashed_password=hash_password(user_in.password))
+    user = User(name=user_in.name, email=user_in.email, hashed_password=hash_password(user_in.password))
     db.add(user)
     db.commit()
     db.refresh(user)

@@ -2,6 +2,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 export type User = {
   id: number;
+  name: string;
   email: string;
   created_at: string;
 };
@@ -40,8 +41,8 @@ async function apiFetch<T>(path: string, token: string | null, body?: object): P
   return res.json();
 }
 
-export function register(email: string, password: string): Promise<User> {
-  return apiFetch<User>("/auth/register", null, { email, password });
+export function register(name: string, email: string, password: string): Promise<User> {
+  return apiFetch<User>("/auth/register", null, { name, email, password });
 }
 
 export async function login(email: string, password: string): Promise<string> {

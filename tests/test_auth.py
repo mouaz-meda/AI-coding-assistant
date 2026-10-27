@@ -36,8 +36,8 @@ def _fresh_db():
     Base.metadata.drop_all(bind=_engine)
 
 
-def _register(email="user@example.com", password="secret123"):
-    return client.post("/auth/register", json={"email": email, "password": password})
+def _register(name="Test User", email="user@example.com", password="secret123"):
+    return client.post("/auth/register", json={"name": name, "email": email, "password": password})
 
 
 def _login(email="user@example.com", password="secret123"):
@@ -50,6 +50,7 @@ def test_register_creates_a_user():
     assert response.status_code == 201
     body = response.json()
     assert body["email"] == "user@example.com"
+    assert body["name"] == "Test User"
     assert "id" in body and "hashed_password" not in body
 
 

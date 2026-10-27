@@ -43,7 +43,7 @@ export default function DashboardPage() {
       <div className="flex flex-1 items-center justify-center p-6">
         <div className="flex w-full max-w-md flex-col gap-4">
           <div className="flex flex-col gap-1">
-            <h1 className="text-2xl font-semibold tracking-tight">Welcome back</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">Welcome back, {user.name}</h1>
             <p className="text-sm text-muted-foreground">
               Ingest a project, then ask the assistant to review or fix it.
             </p>
